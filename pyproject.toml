@@ -1,0 +1,63 @@
+[project]
+name = "ampsmotion"
+version = "1.0.0"
+description = "Desktop Scoring System for AmpeSports - digitising the officiating workflow for AmpeSports"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "AmpsMotion Team" }
+]
+keywords = ["ampesports", "scoring", "sports", "desktop"]
+
+dependencies = [
+    "PySide6>=6.6",
+    "SQLAlchemy>=2.0",
+    "alembic>=1.13",
+    "opencv-python-headless>=4.9",
+    "numpy>=1.26",
+    "pydantic>=2.5",
+    "appdirs>=1.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-qt>=4.3",
+    "ruff>=0.3",
+    "mypy>=1.8",
+]
+build = [
+    "pyinstaller>=6.3",
+]
+
+[project.scripts]
+ampsmotion = "ampsmotion.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["models*", "engine*", "gui*", "camera*", "services*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"

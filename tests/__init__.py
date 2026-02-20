@@ -1,0 +1,3 @@
+"""
+AmpsMotion Test Suite
+"""
