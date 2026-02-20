@@ -81,28 +81,6 @@ ampsmotion/
 - **[AmpsMotion_Engineering_Guide.md](AmpsMotion_Engineering_Guide.md)** — Full engineering guide: domain model, architecture, database schema, scoring engine, GUI design, camera/VAR, event bus, testing, and roadmap.
 
 ---
-
-## Pushing to GitHub
-
-From the project root:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: AmpsMotion desktop scoring for AmpeSports"
-
-# Create a new repository on GitHub (github.com/new), then:
-git remote add origin https://github.com/YOUR_USERNAME/ampsmotion.git
-git branch -M main
-git push -u origin main
-```
-
-Replace `YOUR_USERNAME` with your GitHub username (or org). If you use SSH:
-
-```bash
-git remote add origin git@github.com:YOUR_USERNAME/ampsmotion.git
-```
-
 ---
 
 ## License
