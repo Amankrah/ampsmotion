@@ -11,6 +11,12 @@ from gui.widgets.scoreboard import ScoreboardWidget
 from gui.widgets.match_history import MatchHistoryWidget
 from gui.widgets.substitution_panel import SubstitutionPanel, TeamSubstitutionWidget
 from gui.widgets.court_visualizer import CourtVisualizer, CompactCourtVisualizer
+from gui.widgets.tournament_bracket import (
+    TournamentBracketWidget,
+    KnockoutBracketWidget,
+    GroupTable,
+    MatchCard,
+)
 
 __all__ = [
     "MatchSetupWidget",
@@ -23,4 +29,8 @@ __all__ = [
     "TeamSubstitutionWidget",
     "CourtVisualizer",
     "CompactCourtVisualizer",
+    "TournamentBracketWidget",
+    "KnockoutBracketWidget",
+    "GroupTable",
+    "MatchCard",
 ]

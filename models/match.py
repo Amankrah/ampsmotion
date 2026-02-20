@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from models.bout import Bout
     from models.foul import FoulRecord
     from models.official import Official
+    from models.tournament import Tournament
 
 
 class GameMode(enum.Enum):
@@ -108,6 +109,7 @@ class Match(Base):
     # Relationships
     games: Mapped[list["Game"]] = relationship(back_populates="match", cascade="all, delete-orphan")
     fouls: Mapped[list["FoulRecord"]] = relationship(back_populates="match", cascade="all, delete-orphan")
+    tournament: Mapped[Optional["Tournament"]] = relationship(back_populates="matches")
 
     def __repr__(self) -> str:
         return f"<Match(id={self.id}, mode={self.game_mode.value}, status={self.status.value})>"

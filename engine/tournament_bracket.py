@@ -57,6 +57,21 @@ class BracketMatch:
 
 
 @dataclass
+class HeadToHeadRecord:
+    """Head-to-head record between two teams."""
+    team_id: int
+    opponent_id: int
+    wins: int = 0
+    losses: int = 0
+    ap_scored: int = 0
+    ap_conceded: int = 0
+
+    @property
+    def ap_differential(self) -> int:
+        return self.ap_scored - self.ap_conceded
+
+
+@dataclass
 class GroupStanding:
     """Team standing within a group."""
     team_id: int
@@ -117,6 +132,10 @@ class TournamentBracket(QObject):
         self.groups: dict[str, list[int]] = {}  # group_name -> [team_ids]
         self.group_standings: dict[str, list[GroupStanding]] = {}
         self.group_matches: list[BracketMatch] = []
+
+        # Head-to-head records: (team1_id, team2_id) -> HeadToHeadRecord
+        # Stored for team1 vs team2 where team1 < team2 to avoid duplicates
+        self._head_to_head: dict[tuple[int, int], dict[int, HeadToHeadRecord]] = {}
 
         # Knockout bracket data
         self.bracket_slots: dict[str, BracketSlot] = {}
@@ -238,6 +257,67 @@ class TournamentBracket(QObject):
                         slot1=slot1,
                         slot2=slot2,
                     ))
+
+    def _update_head_to_head(
+        self,
+        team1_id: int,
+        team2_id: int,
+        winner_id: int,
+        team1_score: int,
+        team2_score: int
+    ) -> None:
+        """
+        Update head-to-head record between two teams.
+
+        Args:
+            team1_id: First team ID (home)
+            team2_id: Second team ID (away)
+            winner_id: Winning team ID
+            team1_score: Team 1's score (AP)
+            team2_score: Team 2's score (AP)
+        """
+        # Use ordered key to avoid duplicates
+        key = (min(team1_id, team2_id), max(team1_id, team2_id))
+
+        if key not in self._head_to_head:
+            self._head_to_head[key] = {
+                team1_id: HeadToHeadRecord(team_id=team1_id, opponent_id=team2_id),
+                team2_id: HeadToHeadRecord(team_id=team2_id, opponent_id=team1_id),
+            }
+
+        # Update team1's record
+        h2h_team1 = self._head_to_head[key][team1_id]
+        h2h_team1.ap_scored += team1_score
+        h2h_team1.ap_conceded += team2_score
+        if winner_id == team1_id:
+            h2h_team1.wins += 1
+        else:
+            h2h_team1.losses += 1
+
+        # Update team2's record
+        h2h_team2 = self._head_to_head[key][team2_id]
+        h2h_team2.ap_scored += team2_score
+        h2h_team2.ap_conceded += team1_score
+        if winner_id == team2_id:
+            h2h_team2.wins += 1
+        else:
+            h2h_team2.losses += 1
+
+    def get_head_to_head(self, team1_id: int, team2_id: int) -> Optional[HeadToHeadRecord]:
+        """
+        Get head-to-head record for team1 against team2.
+
+        Args:
+            team1_id: Team whose record to retrieve
+            team2_id: Opponent team
+
+        Returns:
+            HeadToHeadRecord for team1, or None if no matches played
+        """
+        key = (min(team1_id, team2_id), max(team1_id, team2_id))
+        if key in self._head_to_head:
+            return self._head_to_head[key].get(team1_id)
+        return None
 
     def _initialize_knockout_bracket(self) -> None:
         """Initialize empty knockout bracket structure."""
@@ -408,6 +488,12 @@ class TournamentBracket(QObject):
                     else:
                         standing.losses += 1
 
+        # Update head-to-head records
+        self._update_head_to_head(
+            team1_id, team2_id, winner_team_id,
+            home_score, away_score
+        )
+
         self.match_completed.emit({
             "match_id": match_id,
             "stage": "group_stage",
@@ -421,12 +507,110 @@ class TournamentBracket(QObject):
         """
         Get sorted standings for a group.
 
-        Sorted by: points (desc), AP differential (desc), AP scored (desc)
+        Tiebreaker order (per AmpeSports rules):
+        1. Points (desc)
+        2. Head-to-head record against tied teams (wins desc)
+        3. Head-to-head AP differential against tied teams (desc)
+        4. Overall AP differential (desc)
+        5. Overall AP scored (desc)
         """
         standings = self.group_standings.get(group, [])
-        return sorted(
+
+        if not standings:
+            return standings
+
+        # First, do a basic sort by points
+        sorted_standings = sorted(
             standings,
             key=lambda s: (s.points, s.ap_differential, s.ap_scored),
+            reverse=True
+        )
+
+        # Now apply head-to-head tiebreakers for teams with equal points
+        return self._apply_head_to_head_tiebreakers(sorted_standings)
+
+    def _apply_head_to_head_tiebreakers(
+        self,
+        standings: list[GroupStanding]
+    ) -> list[GroupStanding]:
+        """
+        Apply head-to-head tiebreakers to standings.
+
+        Groups teams with equal points and sorts them by:
+        1. H2H wins against tied teams
+        2. H2H AP differential against tied teams
+        3. Overall AP differential
+        4. Overall AP scored
+        """
+        if len(standings) <= 1:
+            return standings
+
+        result = []
+        i = 0
+
+        while i < len(standings):
+            # Find all teams with the same points as standings[i]
+            tied_group = [standings[i]]
+            j = i + 1
+
+            while j < len(standings) and standings[j].points == standings[i].points:
+                tied_group.append(standings[j])
+                j += 1
+
+            if len(tied_group) == 1:
+                # No tie to break
+                result.append(tied_group[0])
+            else:
+                # Break ties using head-to-head
+                sorted_tied = self._sort_by_head_to_head(tied_group)
+                result.extend(sorted_tied)
+
+            i = j
+
+        return result
+
+    def _sort_by_head_to_head(
+        self,
+        tied_teams: list[GroupStanding]
+    ) -> list[GroupStanding]:
+        """
+        Sort tied teams by head-to-head record among themselves.
+
+        Args:
+            tied_teams: Teams with equal points
+
+        Returns:
+            Sorted list with tiebreakers applied
+        """
+        team_ids = [t.team_id for t in tied_teams]
+
+        # Calculate H2H stats for each team against other tied teams
+        h2h_stats: dict[int, dict] = {}
+        for team in tied_teams:
+            h2h_wins = 0
+            h2h_ap_diff = 0
+
+            for other_id in team_ids:
+                if other_id != team.team_id:
+                    record = self.get_head_to_head(team.team_id, other_id)
+                    if record:
+                        h2h_wins += record.wins
+                        h2h_ap_diff += record.ap_differential
+
+            h2h_stats[team.team_id] = {
+                "h2h_wins": h2h_wins,
+                "h2h_ap_diff": h2h_ap_diff,
+            }
+
+        # Sort by H2H wins, then H2H AP diff, then overall AP diff, then AP scored
+        return sorted(
+            tied_teams,
+            key=lambda t: (
+                h2h_stats[t.team_id]["h2h_wins"],
+                h2h_stats[t.team_id]["h2h_ap_diff"],
+                t.ap_differential,
+                t.ap_scored
+            ),
             reverse=True
         )
 
@@ -677,3 +861,300 @@ class TournamentBracket(QObject):
                 return match
 
         return None
+
+    # -------------------------------------------------------------------------
+    # Database Persistence Methods
+    # -------------------------------------------------------------------------
+
+    def save_to_db(self, session) -> int:
+        """
+        Save tournament state to database.
+
+        Args:
+            session: SQLAlchemy session
+
+        Returns:
+            Tournament database ID
+        """
+        from models.tournament import Tournament as TournamentModel
+
+        if self.tournament_id:
+            # Update existing tournament
+            tournament = session.get(TournamentModel, self.tournament_id)
+            if not tournament:
+                raise ValueError(f"Tournament {self.tournament_id} not found")
+        else:
+            # Create new tournament
+            tournament = TournamentModel(
+                name=f"Tournament {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                num_groups=len(self.groups),
+                teams_per_group=len(next(iter(self.groups.values()), [])),
+                team_count=len(self._teams),
+            )
+            session.add(tournament)
+            session.flush()  # Get the ID
+            self.tournament_id = tournament.id
+
+        # Update tournament state from bracket engine
+        tournament.update_from_bracket(self)
+
+        session.commit()
+        return tournament.id
+
+    @classmethod
+    def load_from_db(cls, session, tournament_id: int) -> "TournamentBracket":
+        """
+        Load tournament state from database.
+
+        Args:
+            session: SQLAlchemy session
+            tournament_id: Database ID of the tournament
+
+        Returns:
+            Reconstructed TournamentBracket instance
+        """
+        from models.tournament import Tournament as TournamentModel
+
+        tournament = session.get(TournamentModel, tournament_id)
+        if not tournament:
+            raise ValueError(f"Tournament {tournament_id} not found")
+
+        return cls.from_db_state(tournament.to_bracket_state())
+
+    @classmethod
+    def from_db_state(cls, state: dict) -> "TournamentBracket":
+        """
+        Reconstruct TournamentBracket from saved state.
+
+        Args:
+            state: State dict from Tournament.to_bracket_state()
+
+        Returns:
+            Reconstructed TournamentBracket instance
+        """
+        bracket = cls(tournament_id=state.get("tournament_id"))
+
+        # Restore stage
+        stage_value = state.get("current_stage", "group_stage")
+        bracket.current_stage = TournamentStage(stage_value)
+
+        # Restore groups
+        bracket.groups = state.get("groups", {})
+
+        # Restore teams lookup
+        group_standings = state.get("group_standings", {})
+        for standings_list in group_standings.values():
+            for s in standings_list:
+                bracket._teams[s["team_id"]] = s["team_name"]
+
+        # Restore group standings
+        bracket.group_standings = {}
+        for group, standings_list in group_standings.items():
+            bracket.group_standings[group] = [
+                GroupStanding(
+                    team_id=s["team_id"],
+                    team_name=s["team_name"],
+                    group=s["group"],
+                    played=s["played"],
+                    wins=s["wins"],
+                    losses=s["losses"],
+                    ap_scored=s["ap_scored"],
+                    ap_conceded=s["ap_conceded"],
+                )
+                for s in standings_list
+            ]
+
+        # Restore head-to-head
+        h2h_data = state.get("head_to_head", {})
+        for key_str, records in h2h_data.items():
+            team1_id, team2_id = map(int, key_str.split("-"))
+            key = (team1_id, team2_id)
+            bracket._head_to_head[key] = {}
+            for team_id_str, record_data in records.items():
+                team_id = int(team_id_str)
+                bracket._head_to_head[key][team_id] = HeadToHeadRecord(
+                    team_id=record_data["team_id"],
+                    opponent_id=record_data["opponent_id"],
+                    wins=record_data["wins"],
+                    losses=record_data["losses"],
+                    ap_scored=record_data["ap_scored"],
+                    ap_conceded=record_data["ap_conceded"],
+                )
+
+        # Restore group matches
+        bracket.group_matches = []
+        for m in state.get("group_matches", []):
+            slot1 = BracketSlot(
+                slot_id=f"{m['match_id']}_1",
+                stage=TournamentStage.GROUP_STAGE,
+                position=m["position"],
+                team_id=m["team1_id"],
+                team_name=m["team1_name"],
+                is_winner=m["winner_team_id"] == m["team1_id"] if m["is_complete"] else False,
+            )
+            slot2 = BracketSlot(
+                slot_id=f"{m['match_id']}_2",
+                stage=TournamentStage.GROUP_STAGE,
+                position=m["position"],
+                team_id=m["team2_id"],
+                team_name=m["team2_name"],
+                is_winner=m["winner_team_id"] == m["team2_id"] if m["is_complete"] else False,
+            )
+            bracket.group_matches.append(BracketMatch(
+                match_id=m["match_id"],
+                stage=TournamentStage.GROUP_STAGE,
+                position=m["position"],
+                slot1=slot1,
+                slot2=slot2,
+                is_complete=m["is_complete"],
+                winner_team_id=m.get("winner_team_id"),
+                home_score=m.get("home_score", 0),
+                away_score=m.get("away_score", 0),
+            ))
+
+        # Restore knockout bracket
+        bracket.bracket_slots = {}
+        bracket.knockout_matches = []
+
+        knockout_data = state.get("knockout_bracket", {})
+        for stage_value, matches in knockout_data.items():
+            stage = TournamentStage(stage_value)
+            for m in matches:
+                slot1_data = m["slot1"]
+                slot2_data = m["slot2"]
+
+                slot1 = BracketSlot(
+                    slot_id=slot1_data["slot_id"],
+                    stage=stage,
+                    position=m["position"] * 2,
+                    team_id=slot1_data.get("team_id"),
+                    team_name=slot1_data.get("team_name"),
+                    seed=slot1_data.get("seed"),
+                    is_winner=slot1_data.get("is_winner", False),
+                )
+                slot2 = BracketSlot(
+                    slot_id=slot2_data["slot_id"],
+                    stage=stage,
+                    position=m["position"] * 2 + 1,
+                    team_id=slot2_data.get("team_id"),
+                    team_name=slot2_data.get("team_name"),
+                    seed=slot2_data.get("seed"),
+                    is_winner=slot2_data.get("is_winner", False),
+                )
+
+                bracket.bracket_slots[slot1.slot_id] = slot1
+                bracket.bracket_slots[slot2.slot_id] = slot2
+
+                bracket.knockout_matches.append(BracketMatch(
+                    match_id=m["match_id"],
+                    stage=stage,
+                    position=m["position"],
+                    slot1=slot1,
+                    slot2=slot2,
+                    winner_slot_id=m.get("winner_slot_id"),
+                    is_complete=m.get("is_complete", False),
+                    winner_team_id=m.get("winner_team_id"),
+                    home_score=m.get("home_score", 0),
+                    away_score=m.get("away_score", 0),
+                ))
+
+        return bracket
+
+    def export_state(self) -> dict:
+        """
+        Export full tournament state as a dictionary.
+
+        Useful for JSON serialization or state inspection.
+
+        Returns:
+            Complete state dict that can be used with from_db_state()
+        """
+        # Serialize group standings
+        standings_data = {}
+        for group, standings in self.group_standings.items():
+            standings_data[group] = [
+                {
+                    "team_id": s.team_id,
+                    "team_name": s.team_name,
+                    "group": s.group,
+                    "played": s.played,
+                    "wins": s.wins,
+                    "losses": s.losses,
+                    "ap_scored": s.ap_scored,
+                    "ap_conceded": s.ap_conceded,
+                }
+                for s in standings
+            ]
+
+        # Serialize head-to-head
+        h2h_data = {}
+        for key, records in self._head_to_head.items():
+            key_str = f"{key[0]}-{key[1]}"
+            h2h_data[key_str] = {
+                str(team_id): {
+                    "team_id": record.team_id,
+                    "opponent_id": record.opponent_id,
+                    "wins": record.wins,
+                    "losses": record.losses,
+                    "ap_scored": record.ap_scored,
+                    "ap_conceded": record.ap_conceded,
+                }
+                for team_id, record in records.items()
+            }
+
+        # Serialize group matches
+        group_matches_data = []
+        for m in self.group_matches:
+            group_matches_data.append({
+                "match_id": m.match_id,
+                "position": m.position,
+                "team1_id": m.slot1.team_id,
+                "team1_name": m.slot1.team_name,
+                "team2_id": m.slot2.team_id,
+                "team2_name": m.slot2.team_name,
+                "is_complete": m.is_complete,
+                "winner_team_id": m.winner_team_id,
+                "home_score": m.home_score,
+                "away_score": m.away_score,
+            })
+
+        # Serialize knockout bracket
+        knockout_data = {}
+        for match in self.knockout_matches:
+            stage_key = match.stage.value
+            if stage_key not in knockout_data:
+                knockout_data[stage_key] = []
+
+            knockout_data[stage_key].append({
+                "match_id": match.match_id,
+                "position": match.position,
+                "slot1": {
+                    "slot_id": match.slot1.slot_id,
+                    "team_id": match.slot1.team_id,
+                    "team_name": match.slot1.team_name,
+                    "seed": match.slot1.seed,
+                    "is_winner": match.slot1.is_winner,
+                },
+                "slot2": {
+                    "slot_id": match.slot2.slot_id,
+                    "team_id": match.slot2.team_id,
+                    "team_name": match.slot2.team_name,
+                    "seed": match.slot2.seed,
+                    "is_winner": match.slot2.is_winner,
+                },
+                "winner_slot_id": match.winner_slot_id,
+                "is_complete": match.is_complete,
+                "winner_team_id": match.winner_team_id,
+                "home_score": match.home_score,
+                "away_score": match.away_score,
+            })
+
+        return {
+            "tournament_id": self.tournament_id,
+            "current_stage": self.current_stage.value,
+            "groups": self.groups,
+            "group_standings": standings_data,
+            "head_to_head": h2h_data,
+            "group_matches": group_matches_data,
+            "knockout_bracket": knockout_data,
+        }
