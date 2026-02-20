@@ -14,6 +14,7 @@ from PySide6.QtCore import QObject, Signal
 
 from models.match import GameMode
 from models.bout import BoutResult
+from engine.player_queue import PlayerQueue
 
 
 class MatchState(Enum):
@@ -120,6 +121,10 @@ class ScoringEngine(QObject):
         self._p2_id: Optional[int] = None
         self._p1_name: str = ""
         self._p2_name: str = ""
+
+        # Toss information (set during match setup)
+        self._toss_winner: str = "player1"  # "player1", "player2", "home", or "away"
+        self._toss_choice: str = "opa"  # "opa" or "oshi"
 
         # AP scores
         self._p1_ap: int = 0
@@ -445,18 +450,164 @@ class ScoringEngine(QObject):
 
     # ============ Team Mode Methods (Phase 2) ============
 
-    def setup_team_match(self, home_roster: list[int], away_roster: list[int]) -> None:
-        """Set up a Team vs Team match."""
+    # Additional signals for team mode
+    queue_advanced = Signal(str)            # team name ("home" or "away")
+    substitution_made = Signal(dict)        # substitution details
+    game_ended = Signal(int, str)           # game number, winning team
+
+    # Team mode constants
+    TOTAL_GAMES = 3
+    ROUNDS_PER_GAME = 15
+
+    def setup_team_match(
+        self,
+        home_team_id: int,
+        home_team_name: str,
+        home_roster: list[tuple[int, str]],
+        away_team_id: int,
+        away_team_name: str,
+        away_roster: list[tuple[int, str]],
+    ) -> None:
+        """
+        Set up a Team vs Team match with full roster information.
+
+        Args:
+            home_team_id: Database ID of home team
+            home_team_name: Display name of home team
+            home_roster: List of (player_id, player_name) for home team
+            away_team_id: Database ID of away team
+            away_team_name: Display name of away team
+            away_roster: List of (player_id, player_name) for away team
+        """
         self._reset_state()
-        self._home_roster = home_roster.copy()
-        self._away_roster = away_roster.copy()
+
+        # Team identifiers
+        self._home_team_id = home_team_id
+        self._away_team_id = away_team_id
+        self._p1_name = home_team_name
+        self._p2_name = away_team_name
+
+        # Initialize player queues
+        self._home_queue = PlayerQueue(home_team_id, home_team_name)
+        self._home_queue.setup_roster(home_roster)
+        self._away_queue = PlayerQueue(away_team_id, away_team_name)
+        self._away_queue.setup_roster(away_roster)
+
+        # Store roster IDs for compatibility
+        self._home_roster = [p[0] for p in home_roster]
+        self._away_roster = [p[0] for p in away_roster]
+
+        # Team mode uses games (3 games × 15 rounds)
+        self._current_game = 1
+        self.total_rounds = self.ROUNDS_PER_GAME
+
         self.state = MatchState.SETUP
+        self._emit_score_update()
+
+    def get_active_players(self) -> tuple[Optional[dict], Optional[dict]]:
+        """
+        Get the currently active players (in the Red Zone) for each team.
+
+        Returns:
+            Tuple of (home_player_info, away_player_info) dicts or None
+        """
+        if not hasattr(self, '_home_queue') or not hasattr(self, '_away_queue'):
+            return None, None
+
+        home_active = self._home_queue.active_player
+        away_active = self._away_queue.active_player
+
+        home_info = {
+            "player_id": home_active.player_id,
+            "player_name": home_active.player_name,
+        } if home_active else None
+
+        away_info = {
+            "player_id": away_active.player_id,
+            "player_name": away_active.player_name,
+        } if away_active else None
+
+        return home_info, away_info
+
+    def record_team_bout(
+        self,
+        result: BoutResult,
+        winning_team: str,
+        time_remaining_ms: int = 0,
+    ) -> None:
+        """
+        Record a bout result in team mode.
+        Awards AP to winning team and advances the player queues.
+
+        Args:
+            result: OPA or OSHI
+            winning_team: "home" or "away"
+            time_remaining_ms: Time remaining in the round
+        """
+        if self.state != MatchState.ROUND_ACTIVE:
+            raise RuntimeError(f"Cannot record bout in state: {self.state}")
+
+        self._bout_count += 1
+        self._round_time_remaining_ms = time_remaining_ms
+
+        # Get active players
+        home_active = self._home_queue.active_player
+        away_active = self._away_queue.active_player
+
+        if not home_active or not away_active:
+            raise RuntimeError("No active players in queues")
+
+        # Determine winner/loser
+        if winning_team == "home":
+            winner_id = home_active.player_id
+            loser_id = away_active.player_id
+            self._p1_ap += 1
+            self._round_p1_ap += 1
+            if result == BoutResult.OPA:
+                self._p1_opa_count += 1
+            else:
+                self._p1_oshi_count += 1
+        else:
+            winner_id = away_active.player_id
+            loser_id = home_active.player_id
+            self._p2_ap += 1
+            self._round_p2_ap += 1
+            if result == BoutResult.OPA:
+                self._p2_opa_count += 1
+            else:
+                self._p2_oshi_count += 1
+
+        # Create bout record
+        bout_record = BoutRecord(
+            round_number=self._current_round,
+            bout_number=self._bout_count,
+            result=result,
+            winner_id=winner_id,
+            loser_id=loser_id,
+            time_remaining_ms=time_remaining_ms,
+        )
+        self._bout_history.append(bout_record)
+
+        # Advance both queues
+        self._home_queue.advance_queue()
+        self._away_queue.advance_queue()
+
+        self.bout_recorded.emit({
+            "round": self._current_round,
+            "bout": self._bout_count,
+            "result": result.value,
+            "winner_id": winner_id,
+            "loser_id": loser_id,
+            "winning_team": winning_team,
+            "time_remaining_ms": time_remaining_ms,
+        })
+
         self._emit_score_update()
 
     def eliminate_player(self, player_id: int, from_team: str) -> int:
         """
         Team mode: Remove a player after a round loss.
-        Awards bonus AP based on how many players remain.
+        Awards bonus AP based on how many players remain (Shooter Mode rules).
 
         Args:
             player_id: The player to eliminate
@@ -465,25 +616,47 @@ class ScoringEngine(QObject):
         Returns:
             The bonus AP awarded
         """
-        if from_team == "home":
-            if player_id in self._home_roster:
-                self._home_roster.remove(player_id)
+        # Use PlayerQueue if available
+        if hasattr(self, '_home_queue') and hasattr(self, '_away_queue'):
+            if from_team == "home":
+                self._home_queue.eliminate_player(player_id)
+                remaining = self._home_queue.active_count
                 self._home_eliminated.append(player_id)
-            remaining = len(self._home_roster)
-        else:
-            if player_id in self._away_roster:
-                self._away_roster.remove(player_id)
+            else:
+                self._away_queue.eliminate_player(player_id)
+                remaining = self._away_queue.active_count
                 self._away_eliminated.append(player_id)
-            remaining = len(self._away_roster)
+        else:
+            # Fallback for simple roster lists
+            if from_team == "home":
+                if player_id in self._home_roster:
+                    self._home_roster.remove(player_id)
+                    self._home_eliminated.append(player_id)
+                remaining = len(self._home_roster)
+            else:
+                if player_id in self._away_roster:
+                    self._away_roster.remove(player_id)
+                    self._away_eliminated.append(player_id)
+                remaining = len(self._away_roster)
 
-        # Calculate bonus
+        # Calculate bonus based on Shooter Mode rules
+        # Standard elimination: +3 AP
+        # Endgame (≤3 remaining):
+        #   1st eliminated (3→2): +5 AP
+        #   2nd eliminated (2→1): +10 AP
+        #   Last eliminated (1→0): +15 AP
         if remaining > 3:
             bonus = self.TEAM_ROUND_WIN_BONUS  # +3 AP
+        elif remaining == 2:
+            bonus = self.ENDGAME_BONUSES[1]  # +5 AP (1st endgame elim)
+        elif remaining == 1:
+            bonus = self.ENDGAME_BONUSES[2]  # +10 AP (2nd endgame elim)
+        elif remaining == 0:
+            bonus = self.ENDGAME_BONUSES[3]  # +15 AP (final elim)
         else:
-            elim_order = 3 - remaining  # 1st, 2nd, or 3rd
-            bonus = self.ENDGAME_BONUSES.get(elim_order, self.TEAM_ROUND_WIN_BONUS)
+            bonus = self.TEAM_ROUND_WIN_BONUS
 
-        # Award bonus to the winning team
+        # Award bonus to the winning team (opposite of eliminated team)
         winning_team = "away" if from_team == "home" else "home"
         if winning_team == "home":
             self._p1_ap += bonus
@@ -493,7 +666,100 @@ class ScoringEngine(QObject):
         self.player_eliminated.emit(player_id, 0)
         self._emit_score_update()
 
+        # Check for team elimination (game/match end)
+        if remaining == 0:
+            self._on_team_eliminated(from_team)
+
         return bonus
+
+    def _on_team_eliminated(self, eliminated_team: str) -> None:
+        """Handle when all players on a team are eliminated."""
+        winning_team = "home" if eliminated_team == "away" else "away"
+
+        # End the current game
+        self.game_ended.emit(self._current_game, winning_team)
+
+        if self._current_game >= self.TOTAL_GAMES:
+            self._complete_match()
+        else:
+            # Advance to next game
+            self._current_game += 1
+            self._current_round = 0
+            # Reset queues for new game (would need to re-setup rosters)
+            self.state = MatchState.MATCH_ACTIVE
+
+    def substitute_player(
+        self,
+        team: str,
+        out_player_id: int,
+        in_player_id: int,
+        in_player_name: str,
+    ) -> bool:
+        """
+        Make a substitution (Team mode only).
+
+        Args:
+            team: "home" or "away"
+            out_player_id: Player being removed
+            in_player_id: Player coming in
+            in_player_name: Name of the incoming player
+
+        Returns:
+            True if substitution was successful
+        """
+        queue = self._home_queue if team == "home" else self._away_queue
+
+        if not queue.can_substitute():
+            return False
+
+        success = queue.substitute_player(out_player_id, in_player_id, in_player_name)
+
+        if success:
+            if team == "home":
+                self._home_subs_used += 1
+            else:
+                self._away_subs_used += 1
+
+            self.substitution_made.emit({
+                "team": team,
+                "out_player_id": out_player_id,
+                "in_player_id": in_player_id,
+                "in_player_name": in_player_name,
+                "subs_remaining": queue.remaining_substitutions(),
+            })
+
+        return success
+
+    def get_queue_state(self, team: str) -> list[dict]:
+        """Get the current queue state for a team."""
+        if team == "home" and hasattr(self, '_home_queue'):
+            return self._home_queue.get_queue_state()
+        elif team == "away" and hasattr(self, '_away_queue'):
+            return self._away_queue.get_queue_state()
+        return []
+
+    def get_substitution_info(self, team: str) -> dict:
+        """Get substitution information for a team."""
+        if team == "home":
+            if hasattr(self, '_home_queue'):
+                return {
+                    "used": self._home_queue.substitution_count,
+                    "remaining": self._home_queue.remaining_substitutions(),
+                    "max": PlayerQueue.MAX_SUBSTITUTIONS,
+                }
+            return {"used": self._home_subs_used, "remaining": 5 - self._home_subs_used, "max": 5}
+        else:
+            if hasattr(self, '_away_queue'):
+                return {
+                    "used": self._away_queue.substitution_count,
+                    "remaining": self._away_queue.remaining_substitutions(),
+                    "max": PlayerQueue.MAX_SUBSTITUTIONS,
+                }
+            return {"used": self._away_subs_used, "remaining": 5 - self._away_subs_used, "max": 5}
+
+    def is_team_mode(self) -> bool:
+        """Check if this is a team mode match."""
+        return self.game_mode == GameMode.TEAM_VS_TEAM
 
     # ============ Query Methods ============
 
@@ -536,3 +802,52 @@ class ScoringEngine(QObject):
     def can_record_bout(self) -> bool:
         """Check if a bout can be recorded."""
         return self.state == MatchState.ROUND_ACTIVE
+
+    @property
+    def opa_player_id(self) -> Optional[int]:
+        """Get the player ID who has OPA (from toss)."""
+        if not hasattr(self, '_toss_winner') or not hasattr(self, '_toss_choice'):
+            return self._p1_id  # Default to player 1
+
+        # Determine who has OPA based on toss
+        toss_winner = self._toss_winner
+        toss_choice = self._toss_choice
+
+        # For 1v1: toss_winner is "player1" or "player2"
+        # For team: toss_winner is "home" or "away"
+        if toss_winner in ("player1", "home"):
+            # Player 1 / Home won the toss
+            if toss_choice == "opa":
+                return self._p1_id  # They chose OPA
+            else:
+                return self._p2_id  # They chose OSHI, so opponent has OPA
+        else:
+            # Player 2 / Away won the toss
+            if toss_choice == "opa":
+                return self._p2_id  # They chose OPA
+            else:
+                return self._p1_id  # They chose OSHI, so opponent has OPA
+
+    @property
+    def oshi_player_id(self) -> Optional[int]:
+        """Get the player ID who has OSHI (from toss)."""
+        # OSHI player is opposite of OPA player
+        opa_id = self.opa_player_id
+        if opa_id == self._p1_id:
+            return self._p2_id
+        else:
+            return self._p1_id
+
+    @property
+    def opa_player_name(self) -> str:
+        """Get the name of the player who has OPA."""
+        if self.opa_player_id == self._p1_id:
+            return self._p1_name
+        return self._p2_name
+
+    @property
+    def oshi_player_name(self) -> str:
+        """Get the name of the player who has OSHI."""
+        if self.oshi_player_id == self._p1_id:
+            return self._p1_name
+        return self._p2_name

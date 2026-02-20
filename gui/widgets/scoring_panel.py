@@ -1,15 +1,18 @@
 """
-Live Scoring Panel
+Live Scoring Panel - ONE-CLICK BOUT RECORDING
 
-The primary screen during a match. Designed for speed — the Master Ampfre
-must record bouts as fast as they happen (sub-second reaction).
+The primary screen during a match. Designed for MAXIMUM speed — bouts happen
+in split seconds during heated exchanges and must be recorded instantly.
 
-Keyboard shortcuts (from Section 8.3):
-- O: Record Opa
-- S: Record Oshi
-- 1: Winner = Player 1
-- 2: Winner = Player 2
-- Enter: Confirm & record bout
+ONE-CLICK SYSTEM:
+The toss determines which player has OPA vs OSHI. During the match:
+- Click OPA button → records bout win for the OPA player
+- Click OSHI button → records bout win for the OSHI player
+NO winner selection needed. NO "Record Bout" button needed. ONE CLICK = ONE BOUT.
+
+Keyboard shortcuts:
+- O: Record OPA bout (instant)
+- S: Record OSHI bout (instant)
 - Ctrl+Z: Undo last bout
 - Space: Pause/Resume timer
 - F: Open Foul dialog
@@ -38,10 +41,17 @@ if TYPE_CHECKING:
 
 class ScoringPanel(QWidget):
     """
-    Bout recording panel with large Opa/Oshi buttons.
+    ONE-CLICK bout recording panel.
+
+    The toss determines which player has OPA vs OSHI, so clicking
+    a button immediately records a bout win for that player.
+
+    - Click OPA → records win for the OPA player
+    - Click OSHI → records win for the OSHI player
+    - Press O or S for keyboard shortcuts
 
     Signals:
-        bout_submitted: Emitted when a bout is recorded
+        bout_submitted: Emitted when a bout is recorded (includes result and winner)
     """
 
     bout_submitted = Signal(dict)
@@ -49,157 +59,179 @@ class ScoringPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.selected_result: Optional[BoutResult] = None
-        self.selected_winner: Optional[int] = None  # 1 or 2
+        # Player assignments from toss
+        self._opa_player_id: Optional[int] = None
+        self._oshi_player_id: Optional[int] = None
+        self._opa_player_name: str = "OPA Player"
+        self._oshi_player_name: str = "OSHI Player"
 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Build the bout recording UI."""
+        """Build the one-click bout recording UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(10)
 
-        # Title
-        title = QLabel("Bout Recording")
-        title.setStyleSheet("font-size: 12pt; font-weight: bold; color: #FCD116;")
+        # Title with instructions
+        title = QLabel("ONE-CLICK BOUT RECORDING")
+        title.setStyleSheet("font-size: 11pt; font-weight: bold; color: #FCD116;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
-        # Opa/Oshi buttons
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(20)
+        hint = QLabel("Click the winning call or press O / S")
+        hint.setStyleSheet("font-size: 9pt; color: #A0A0B0;")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(hint)
 
-        self.btn_opa = QPushButton("OPA\n(Different Legs)")
+        # Large OPA/OSHI buttons - clicking records immediately
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(15)
+
+        # OPA Button - shows player name who has OPA
+        self.btn_opa = QPushButton()
         self.btn_opa.setObjectName("opa_button")
-        self.btn_opa.setCheckable(True)
-        self.btn_opa.clicked.connect(lambda: self._select_result(BoutResult.OPA))
+        self.btn_opa.setMinimumHeight(120)
+        self.btn_opa.setStyleSheet("""
+            QPushButton {
+                background-color: #006B3F;
+                font-size: 14pt;
+                font-weight: bold;
+                border: 3px solid #008B4F;
+                border-radius: 12px;
+                padding: 15px;
+            }
+            QPushButton:hover {
+                background-color: #008B4F;
+                border-color: #00AB6F;
+            }
+            QPushButton:pressed {
+                background-color: #00AB6F;
+            }
+        """)
+        self.btn_opa.clicked.connect(self._record_opa)
         buttons_layout.addWidget(self.btn_opa)
 
-        self.btn_oshi = QPushButton("OSHI\n(Same Legs)")
+        # OSHI Button - shows player name who has OSHI
+        self.btn_oshi = QPushButton()
         self.btn_oshi.setObjectName("oshi_button")
-        self.btn_oshi.setCheckable(True)
-        self.btn_oshi.clicked.connect(lambda: self._select_result(BoutResult.OSHI))
+        self.btn_oshi.setMinimumHeight(120)
+        self.btn_oshi.setStyleSheet("""
+            QPushButton {
+                background-color: #CE1126;
+                font-size: 14pt;
+                font-weight: bold;
+                border: 3px solid #EE3146;
+                border-radius: 12px;
+                padding: 15px;
+            }
+            QPushButton:hover {
+                background-color: #EE3146;
+                border-color: #FF5166;
+            }
+            QPushButton:pressed {
+                background-color: #FF5166;
+            }
+        """)
+        self.btn_oshi.clicked.connect(self._record_oshi)
         buttons_layout.addWidget(self.btn_oshi)
 
         layout.addLayout(buttons_layout)
 
-        # Winner selection
-        winner_group = QGroupBox("Winner")
-        winner_layout = QHBoxLayout(winner_group)
+        # Update button labels
+        self._update_button_labels()
 
-        self.winner_group = QButtonGroup(self)
-
-        self.btn_p1_wins = QRadioButton("Player 1")
-        self.btn_p1_wins.setStyleSheet("font-size: 10pt; padding: 10px;")
-        self.winner_group.addButton(self.btn_p1_wins, 1)
-        winner_layout.addWidget(self.btn_p1_wins)
-
-        self.btn_p2_wins = QRadioButton("Player 2")
-        self.btn_p2_wins.setStyleSheet("font-size: 10pt; padding: 10px;")
-        self.winner_group.addButton(self.btn_p2_wins, 2)
-        winner_layout.addWidget(self.btn_p2_wins)
-
-        self.winner_group.buttonClicked.connect(self._on_winner_selected)
-
-        layout.addWidget(winner_group)
-
-        # Action buttons
+        # Secondary actions row
         actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(10)
 
-        self.btn_record = QPushButton("✓ Record Bout")
-        self.btn_record.setStyleSheet(
-            "background-color: #006B3F; font-size: 10pt; padding: 12px 24px;"
-        )
-        self.btn_record.clicked.connect(self._record_bout)
-        self.btn_record.setEnabled(False)
-        actions_layout.addWidget(self.btn_record)
-
-        self.btn_foul = QPushButton("⚠ Foul")
-        self.btn_foul.setStyleSheet("font-size: 10pt; padding: 12px 24px;")
+        self.btn_foul = QPushButton("⚠ Foul (F)")
+        self.btn_foul.setStyleSheet("font-size: 9pt; padding: 8px 16px;")
         self.btn_foul.clicked.connect(self._open_foul_dialog)
         actions_layout.addWidget(self.btn_foul)
 
-        self.btn_undo = QPushButton("↩ Undo")
-        self.btn_undo.setStyleSheet("font-size: 10pt; padding: 12px 24px;")
+        self.btn_undo = QPushButton("↩ Undo (Ctrl+Z)")
+        self.btn_undo.setStyleSheet("font-size: 9pt; padding: 8px 16px;")
         self.btn_undo.clicked.connect(self._undo_bout)
         actions_layout.addWidget(self.btn_undo)
 
         layout.addLayout(actions_layout)
 
-    def _select_result(self, result: BoutResult) -> None:
-        """Select the bout result (Opa or Oshi)."""
-        self.selected_result = result
+    def _update_button_labels(self) -> None:
+        """Update the button labels with player names."""
+        self.btn_opa.setText(f"OPA\n(O)\n\n{self._opa_player_name}")
+        self.btn_oshi.setText(f"OSHI\n(S)\n\n{self._oshi_player_name}")
 
-        # Update button states
-        self.btn_opa.setChecked(result == BoutResult.OPA)
-        self.btn_oshi.setChecked(result == BoutResult.OSHI)
+    def set_toss_result(self, opa_player_id: int, opa_player_name: str,
+                        oshi_player_id: int, oshi_player_name: str) -> None:
+        """
+        Set which player has OPA vs OSHI based on toss result.
 
-        self._check_ready()
+        Args:
+            opa_player_id: Player ID who has OPA
+            opa_player_name: Name of OPA player
+            oshi_player_id: Player ID who has OSHI
+            oshi_player_name: Name of OSHI player
+        """
+        self._opa_player_id = opa_player_id
+        self._oshi_player_id = oshi_player_id
+        self._opa_player_name = opa_player_name
+        self._oshi_player_name = oshi_player_name
+        self._update_button_labels()
 
-    def _on_winner_selected(self, button: QRadioButton) -> None:
-        """Handle winner selection."""
-        self.selected_winner = self.winner_group.id(button)
-        self._check_ready()
-
-    def _check_ready(self) -> None:
-        """Check if ready to record bout."""
-        ready = self.selected_result is not None and self.selected_winner is not None
-        self.btn_record.setEnabled(ready)
-
-    def _record_bout(self) -> None:
-        """Submit the bout recording."""
-        if self.selected_result and self.selected_winner:
+    def _record_opa(self) -> None:
+        """Record OPA bout - winner is the OPA player."""
+        if self._opa_player_id is not None:
             self.bout_submitted.emit({
-                "result": self.selected_result,
-                "winner": self.selected_winner,
+                "result": BoutResult.OPA,
+                "winner_id": self._opa_player_id,
+                "loser_id": self._oshi_player_id,
             })
-            self._reset_selection()
 
-    def _reset_selection(self) -> None:
-        """Reset the bout selection state."""
-        self.selected_result = None
-        self.selected_winner = None
-        self.btn_opa.setChecked(False)
-        self.btn_oshi.setChecked(False)
-        self.winner_group.setExclusive(False)
-        self.btn_p1_wins.setChecked(False)
-        self.btn_p2_wins.setChecked(False)
-        self.winner_group.setExclusive(True)
-        self.btn_record.setEnabled(False)
+    def _record_oshi(self) -> None:
+        """Record OSHI bout - winner is the OSHI player."""
+        if self._oshi_player_id is not None:
+            self.bout_submitted.emit({
+                "result": BoutResult.OSHI,
+                "winner_id": self._oshi_player_id,
+                "loser_id": self._opa_player_id,
+            })
+
+    def record_opa(self) -> None:
+        """Public method for keyboard shortcut - record OPA."""
+        self._record_opa()
+
+    def record_oshi(self) -> None:
+        """Public method for keyboard shortcut - record OSHI."""
+        self._record_oshi()
 
     def _open_foul_dialog(self) -> None:
         """Open the foul recording dialog."""
-        # TODO: Implement foul dialog
         QMessageBox.information(self, "Foul", "Foul recording dialog - coming soon")
 
     def _undo_bout(self) -> None:
-        """Request undo of last bout."""
-        # Handled by parent ScoringScreen
+        """Request undo of last bout - handled by parent ScoringScreen."""
         pass
 
+    # Legacy methods for compatibility (no longer used)
     def set_player_names(self, p1_name: str, p2_name: str) -> None:
-        """Set the player names on the winner buttons."""
-        self.btn_p1_wins.setText(f"{p1_name} (1)")
-        self.btn_p2_wins.setText(f"{p2_name} (2)")
+        """Legacy - use set_toss_result instead."""
+        pass
 
     def select_opa(self) -> None:
-        """Programmatically select Opa (for keyboard shortcut)."""
-        self._select_result(BoutResult.OPA)
+        """Legacy keyboard handler - now directly records."""
+        self._record_opa()
 
     def select_oshi(self) -> None:
-        """Programmatically select Oshi (for keyboard shortcut)."""
-        self._select_result(BoutResult.OSHI)
+        """Legacy keyboard handler - now directly records."""
+        self._record_oshi()
 
     def select_winner_1(self) -> None:
-        """Programmatically select Player 1 as winner."""
-        self.btn_p1_wins.setChecked(True)
-        self.selected_winner = 1
-        self._check_ready()
+        """Legacy - no longer needed with one-click recording."""
+        pass
 
     def select_winner_2(self) -> None:
-        """Programmatically select Player 2 as winner."""
-        self.btn_p2_wins.setChecked(True)
-        self.selected_winner = 2
-        self._check_ready()
+        """Legacy - no longer needed with one-click recording."""
+        pass
 
 
 class ScoringScreen(QWidget):
@@ -351,30 +383,27 @@ class ScoringScreen(QWidget):
         return frame
 
     def _setup_shortcuts(self) -> None:
-        """Set up keyboard shortcuts for fast bout recording."""
-        # O - Opa
+        """
+        Set up keyboard shortcuts for INSTANT bout recording.
+
+        ONE-CLICK shortcuts:
+        - O: Record OPA bout (winner = OPA player)
+        - S: Record OSHI bout (winner = OSHI player)
+
+        Other shortcuts:
+        - Ctrl+Z: Undo last bout
+        - Space: Pause/Resume
+        - F: Open foul dialog
+        - Ctrl+E: End round
+        """
+        # O - Record OPA (instant, one key)
         QShortcut(QKeySequence("O"), self).activated.connect(
-            self.scoring_panel.select_opa
+            self.scoring_panel.record_opa
         )
 
-        # S - Oshi
+        # S - Record OSHI (instant, one key)
         QShortcut(QKeySequence("S"), self).activated.connect(
-            self.scoring_panel.select_oshi
-        )
-
-        # 1 - Player 1 wins
-        QShortcut(QKeySequence("1"), self).activated.connect(
-            self.scoring_panel.select_winner_1
-        )
-
-        # 2 - Player 2 wins
-        QShortcut(QKeySequence("2"), self).activated.connect(
-            self.scoring_panel.select_winner_2
-        )
-
-        # Enter - Record bout
-        QShortcut(QKeySequence(Qt.Key.Key_Return), self).activated.connect(
-            self.scoring_panel._record_bout
+            self.scoring_panel.record_oshi
         )
 
         # Ctrl+Z - Undo
@@ -421,27 +450,69 @@ class ScoringScreen(QWidget):
         # Update UI with initial state
         self._update_display(engine.get_score_state())
 
-        # Set player names
-        self.scoring_panel.set_player_names(engine._p1_name, engine._p2_name)
+        # Set player names on display
         self.p1_name_label.setText(engine._p1_name)
         self.p2_name_label.setText(engine._p2_name)
 
+        # Set toss result on scoring panel for one-click recording
+        # The engine now has opa_player_id and oshi_player_id properties
+        self.scoring_panel.set_toss_result(
+            opa_player_id=engine.opa_player_id,
+            opa_player_name=engine.opa_player_name,
+            oshi_player_id=engine.oshi_player_id,
+            oshi_player_name=engine.oshi_player_name,
+        )
+
     @Slot(dict)
     def _on_bout_submitted(self, data: dict) -> None:
-        """Handle bout submission from the scoring panel."""
-        if not self.scoring_engine or not self.scoring_engine.can_record_bout:
+        """
+        Handle bout submission from the scoring panel.
+
+        With ONE-CLICK recording, data contains:
+        - result: BoutResult (OPA or OSHI)
+        - winner_id: Player ID who won
+        - loser_id: Player ID who lost
+        """
+        if not self.scoring_engine:
+            QMessageBox.warning(
+                self,
+                "No Active Match",
+                "No scoring engine is active. Please set up a match first."
+            )
+            return
+
+        if not self.scoring_engine.can_record_bout:
+            # Provide helpful feedback about why bout can't be recorded
+            state = self.scoring_engine.state
+            if state == MatchState.MATCH_ACTIVE or state == MatchState.ROUND_COMPLETE:
+                QMessageBox.warning(
+                    self,
+                    "Round Not Started",
+                    "Please click 'Start Round' before recording bouts."
+                )
+            elif state == MatchState.PAUSED:
+                QMessageBox.warning(
+                    self,
+                    "Match Paused",
+                    "The match is paused. Click 'Resume' to continue recording bouts."
+                )
+            elif state == MatchState.COMPLETED:
+                QMessageBox.warning(
+                    self,
+                    "Match Completed",
+                    "The match has already completed. No more bouts can be recorded."
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Cannot Record Bout",
+                    f"Cannot record bout in current state: {state.value}"
+                )
             return
 
         result = data["result"]
-        winner = data["winner"]
-
-        # Determine winner/loser IDs
-        if winner == 1:
-            winner_id = self.scoring_engine._p1_id
-            loser_id = self.scoring_engine._p2_id
-        else:
-            winner_id = self.scoring_engine._p2_id
-            loser_id = self.scoring_engine._p1_id
+        winner_id = data["winner_id"]
+        loser_id = data["loser_id"]
 
         # Get time remaining
         time_remaining = self.round_timer.remaining_ms if self.round_timer else 0
@@ -588,11 +659,19 @@ class ScoringScreen(QWidget):
         result = bout_data["result"].upper()
         winner_id = bout_data["winner_id"]
 
-        winner_name = "P1" if winner_id == 1 else "P2"
+        # Get actual player name from scoring engine
+        if self.scoring_engine:
+            if winner_id == self.scoring_engine._p1_id:
+                winner_name = self.scoring_engine._p1_name
+            else:
+                winner_name = self.scoring_engine._p2_name
+        else:
+            winner_name = "P1" if winner_id == 1 else "P2"
+
         time_ms = bout_data.get("time_remaining_ms", 0)
         time_str = f"{time_ms // 1000}s" if time_ms else ""
 
-        item = QListWidgetItem(f"#{bout_data['bout']} {result} → {winner_name} wins ({time_str})")
+        item = QListWidgetItem(f"#{bout_data['bout']} {result} → {winner_name} ({time_str})")
 
         if result == "OPA":
             item.setForeground(Qt.GlobalColor.green)
@@ -622,8 +701,14 @@ class ScoringScreen(QWidget):
             "font-size: 32pt; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
         )
 
-        # Show round result
-        winner_text = "Player 1" if winner == "player1" else "Player 2" if winner == "player2" else "Tie"
+        # Show round result with actual player/team name
+        if winner == "player1":
+            winner_text = self.scoring_engine._p1_name if self.scoring_engine else "Player 1"
+        elif winner == "player2":
+            winner_text = self.scoring_engine._p2_name if self.scoring_engine else "Player 2"
+        else:
+            winner_text = "Tie"
+
         QMessageBox.information(
             self,
             f"Round {round_num} Complete",
@@ -637,12 +722,21 @@ class ScoringScreen(QWidget):
         p1_ap = results.get("player1_ap", 0)
         p2_ap = results.get("player2_ap", 0)
 
-        winner_text = "Player 1" if winner == "player1" else "Player 2" if winner == "player2" else "Tie"
+        # Get actual player/team names
+        p1_name = self.scoring_engine._p1_name if self.scoring_engine else "Player 1"
+        p2_name = self.scoring_engine._p2_name if self.scoring_engine else "Player 2"
+
+        if winner == "player1":
+            winner_text = p1_name
+        elif winner == "player2":
+            winner_text = p2_name
+        else:
+            winner_text = "Tie"
 
         QMessageBox.information(
             self,
             "Match Complete",
-            f"Winner: {winner_text}\n\nFinal Score:\nPlayer 1: {p1_ap} AP\nPlayer 2: {p2_ap} AP"
+            f"Winner: {winner_text}\n\nFinal Score:\n{p1_name}: {p1_ap} AP\n{p2_name}: {p2_ap} AP"
         )
 
         # Disable all controls

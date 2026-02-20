@@ -365,3 +365,155 @@ class TestScoringEngineSignals:
         self.engine.end_round()
 
         self.round_ended_mock.assert_called_once_with(1, "player1")
+
+
+class TestScoringEngineTeamModeWithQueues:
+    """Tests for Team vs Team mode with PlayerQueue integration."""
+
+    def setup_method(self):
+        """Set up a team mode engine with full queue support."""
+        self.engine = ScoringEngine(GameMode.TEAM_VS_TEAM, total_rounds=15)
+
+        # Create rosters
+        home_roster = [(i, f"Home Player {i}") for i in range(1, 16)]
+        away_roster = [(i + 100, f"Away Player {i}") for i in range(1, 16)]
+
+        self.engine.setup_team_match(
+            home_team_id=1,
+            home_team_name="Home Team",
+            home_roster=home_roster,
+            away_team_id=2,
+            away_team_name="Away Team",
+            away_roster=away_roster,
+        )
+
+    def test_team_match_setup(self):
+        """Team match setup initializes queues correctly."""
+        assert self.engine.state == MatchState.SETUP
+        assert hasattr(self.engine, '_home_queue')
+        assert hasattr(self.engine, '_away_queue')
+        assert self.engine._home_queue.active_count == 15
+        assert self.engine._away_queue.active_count == 15
+
+    def test_get_active_players(self):
+        """Should return currently active players from each team."""
+        home_active, away_active = self.engine.get_active_players()
+
+        assert home_active is not None
+        assert away_active is not None
+        assert home_active["player_id"] == 1
+        assert away_active["player_id"] == 101
+
+    def test_record_team_bout_home_wins(self):
+        """Recording a bout with home team winning."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        self.engine.record_team_bout(BoutResult.OPA, "home", 55000)
+
+        assert self.engine._p1_ap == 1
+        assert self.engine._p2_ap == 0
+        assert self.engine._p1_opa_count == 1
+
+    def test_record_team_bout_away_wins(self):
+        """Recording a bout with away team winning."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        self.engine.record_team_bout(BoutResult.OSHI, "away", 55000)
+
+        assert self.engine._p2_ap == 1
+        assert self.engine._p1_ap == 0
+        assert self.engine._p2_oshi_count == 1
+
+    def test_record_team_bout_advances_queues(self):
+        """Recording a bout should advance both team queues."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        # Before bout, player 1 is active for home, player 101 for away
+        home_active_before, away_active_before = self.engine.get_active_players()
+        assert home_active_before["player_id"] == 1
+        assert away_active_before["player_id"] == 101
+
+        self.engine.record_team_bout(BoutResult.OPA, "home", 55000)
+
+        # After bout, player 2 should be active for home, 102 for away
+        home_active_after, away_active_after = self.engine.get_active_players()
+        assert home_active_after["player_id"] == 2
+        assert away_active_after["player_id"] == 102
+
+    def test_eliminate_with_queue(self):
+        """Eliminating a player should update the queue."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        initial_count = self.engine._away_queue.active_count
+        self.engine.eliminate_player(101, "away")
+
+        assert self.engine._away_queue.active_count == initial_count - 1
+        assert 101 in self.engine._away_eliminated
+
+    def test_substitution(self):
+        """Making a substitution should work correctly."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        # Advance queue so active player isn't the one we're subbing
+        self.engine.record_team_bout(BoutResult.OPA, "home", 55000)
+
+        # Sub out player 1 (now at box 15) for a new player
+        success = self.engine.substitute_player("home", 1, 999, "New Player")
+
+        assert success
+        sub_info = self.engine.get_substitution_info("home")
+        assert sub_info["used"] == 1
+        assert sub_info["remaining"] == 4
+
+    def test_max_substitutions(self):
+        """Cannot exceed maximum substitutions."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        # Make 5 substitutions using non-active players
+        for i in range(5):
+            # Find a non-active player from home queue
+            non_active = [p for p in self.engine._home_queue.players
+                          if not p.is_active and not p.is_eliminated]
+            if non_active:
+                player_out = non_active[-1].player_id  # Pick one from the back
+                self.engine.substitute_player("home", player_out, 200 + i, f"Sub {i}")
+
+        # Verify 5 subs were made
+        sub_info = self.engine.get_substitution_info("home")
+        assert sub_info["used"] == 5
+        assert sub_info["remaining"] == 0
+
+        # 6th should fail
+        non_active = [p for p in self.engine._home_queue.players
+                      if not p.is_active and not p.is_eliminated]
+        if non_active:
+            player_out = non_active[-1].player_id
+            success = self.engine.substitute_player("home", player_out, 300, "Extra")
+            assert not success
+
+    def test_get_queue_state(self):
+        """Should return queue state for display."""
+        self.engine.start_match()
+        self.engine.start_round()
+
+        home_state = self.engine.get_queue_state("home")
+        away_state = self.engine.get_queue_state("away")
+
+        assert len(home_state) == 15
+        assert len(away_state) == 15
+        assert home_state[0]["is_active"]
+        assert home_state[0]["box_number"] == 1
+
+    def test_is_team_mode(self):
+        """Should correctly identify team mode."""
+        assert self.engine.is_team_mode()
+
+        # Create 1v1 engine
+        engine_1v1 = ScoringEngine(GameMode.ONE_VS_ONE, total_rounds=5)
+        assert not engine_1v1.is_team_mode()

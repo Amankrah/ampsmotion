@@ -132,6 +132,7 @@ class MainWindow(QMainWindow):
         """Switch to the scoring screen after match setup."""
         self.navigate_to("scoring")
         self.status_bar.showMessage("Match in progress")
+        self.status_match.setText("Match active — Click 'Start Round' to begin")
 
     def _open_audience_display(self) -> None:
         """Open the audience display window."""
