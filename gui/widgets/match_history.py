@@ -32,11 +32,12 @@ class MatchHistoryWidget(QWidget):
     def _build_ui(self) -> None:
         """Build the match history UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
+        layout.setSpacing(24)
+        layout.setContentsMargins(24, 24, 24, 24)
 
         # Title
         title = QLabel("Match History")
-        title.setStyleSheet("font-size: 32pt; font-weight: bold; color: #FCD116;")
+        title.setObjectName("page_title")
         layout.addWidget(title)
 
         # Toolbar
@@ -73,7 +74,8 @@ class MatchHistoryWidget(QWidget):
             "Complete a match to see it here.\n"
             "Match data is saved automatically."
         )
-        self.placeholder.setStyleSheet("font-size: 14pt; color: #666;")
+        self.placeholder.setObjectName("hint_label")
+        self.placeholder.setStyleSheet("font-size: 14pt; color: #666666;")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.placeholder)
 

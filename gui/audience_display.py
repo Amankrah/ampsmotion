@@ -58,8 +58,8 @@ class AudienceDisplay(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(30)
+        layout.setContentsMargins(48, 48, 48, 48)
+        layout.setSpacing(36)
 
         # Title bar
         self.title_label = QLabel("AmpeSports — 1 vs 1")
@@ -67,7 +67,7 @@ class AudienceDisplay(QMainWindow):
         self.title_label.setStyleSheet("""
             font-size: 32pt;
             font-weight: bold;
-            color: #FCD116;
+            color: #E8B923;
             letter-spacing: 2px;
         """)
         layout.addWidget(self.title_label)
@@ -98,7 +98,7 @@ class AudienceDisplay(QMainWindow):
         # Add glow effect
         glow = QGraphicsDropShadowEffect()
         glow.setBlurRadius(30)
-        glow.setColor(QColor("#FCD116"))
+        glow.setColor(QColor("#E8B923"))
         glow.setOffset(0, 0)
         self.score_display.setGraphicsEffect(glow)
         vs_layout.addWidget(self.score_display)
@@ -169,7 +169,7 @@ class AudienceDisplay(QMainWindow):
         frame = QFrame()
         frame.setStyleSheet(f"""
             QFrame {{
-                background-color: #16213E;
+                background-color: #1C1C28;
                 border: 4px solid {border_color};
                 border-radius: 20px;
                 padding: 30px;
@@ -205,7 +205,7 @@ class AudienceDisplay(QMainWindow):
         # AP label
         ap_label = QLabel("AP")
         ap_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ap_label.setStyleSheet("font-size: 13pt; color: #FCD116;")
+        ap_label.setStyleSheet("font-size: 13pt; color: #E8B923;")
         layout.addWidget(ap_label)
 
         # Stats breakdown
@@ -300,7 +300,7 @@ class AudienceDisplay(QMainWindow):
         """Handle round end."""
         winner_text = "Player 1" if winner == "player1" else "Player 2" if winner == "player2" else "TIE"
         self.status_label.setText(f"ROUND {round_num} — {winner_text} WINS")
-        self.status_label.setStyleSheet("font-size: 16pt; color: #FCD116;")
+        self.status_label.setStyleSheet("font-size: 16pt; color: #E8B923;")
 
         # Reset timer display
         self.timer_display.setText("--:--")
@@ -318,14 +318,14 @@ class AudienceDisplay(QMainWindow):
         winner_text = "PLAYER 1" if winner == "player1" else "PLAYER 2" if winner == "player2" else "TIE"
 
         self.status_label.setText(f"🏆 MATCH COMPLETE — {winner_text} WINS! 🏆")
-        self.status_label.setStyleSheet("font-size: 22pt; color: #FCD116;")
+        self.status_label.setStyleSheet("font-size: 22pt; color: #E8B923;")
 
         self.timer_display.setText("FINAL")
         self.timer_display.setStyleSheet("""
             font-size: 48pt;
             font-weight: bold;
             font-family: 'JetBrains Mono', 'Consolas', monospace;
-            color: #FCD116;
+            color: #E8B923;
         """)
 
     def enter_fullscreen(self) -> None:

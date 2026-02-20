@@ -72,7 +72,7 @@ Match
 Teams: 15 players each, max 5 substitutions per match
 ```
 
-**Player queue movement:** Players occupy Boxes 1–15 across 5 lanes. After playing in the Red Zone (Box 1), the player cycles to Box 15 and works back down. Eliminated players exit via the Exit Lane.
+**Player queue movement:** Two players compete at a time in the Red Zone (Box 1)—one from each team. The **winner stays in the center**; the **loser** leaves and cycles to Box 15, and the **next player from the losing team** enters the Red Zone to face the winner. So only the **losing** team's queue advances after each bout. Players occupy Boxes 1–15 across 5 lanes and work back down. Eliminated players exit via the Exit Lane.
 
 #### 2.2.3 — Tournament Mode
 

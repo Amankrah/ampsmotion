@@ -427,21 +427,21 @@ class TestScoringEngineTeamModeWithQueues:
         assert self.engine._p2_oshi_count == 1
 
     def test_record_team_bout_advances_queues(self):
-        """Recording a bout should advance both team queues."""
+        """Recording a bout advances only the LOSING team's queue (winner stays in center)."""
         self.engine.start_match()
         self.engine.start_round()
 
-        # Before bout, player 1 is active for home, player 101 for away
+        # Before bout: home 1 vs away 101 in Red Zone
         home_active_before, away_active_before = self.engine.get_active_players()
         assert home_active_before["player_id"] == 1
         assert away_active_before["player_id"] == 101
 
+        # Home wins → only away (loser) queue advances; home winner stays in Box 1
         self.engine.record_team_bout(BoutResult.OPA, "home", 55000)
 
-        # After bout, player 2 should be active for home, 102 for away
         home_active_after, away_active_after = self.engine.get_active_players()
-        assert home_active_after["player_id"] == 2
-        assert away_active_after["player_id"] == 102
+        assert home_active_after["player_id"] == 1   # Winner stays in center
+        assert away_active_after["player_id"] == 102  # Loser cycled to back, next away player in
 
     def test_eliminate_with_queue(self):
         """Eliminating a player should update the queue."""
@@ -459,8 +459,8 @@ class TestScoringEngineTeamModeWithQueues:
         self.engine.start_match()
         self.engine.start_round()
 
-        # Advance queue so active player isn't the one we're subbing
-        self.engine.record_team_bout(BoutResult.OPA, "home", 55000)
+        # Away wins so home queue advances (player 1 moves to box 15, player 2 now active)
+        self.engine.record_team_bout(BoutResult.OPA, "away", 55000)
 
         # Sub out player 1 (now at box 15) for a new player
         success = self.engine.substitute_player("home", 1, 999, "New Player")

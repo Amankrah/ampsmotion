@@ -481,9 +481,11 @@ class ScoringEngine(QObject):
         """
         self._reset_state()
 
-        # Team identifiers
+        # Team identifiers (use same _p1_id/_p2_id as 1v1 so record_bout/opa_player_id/oshi_player_id work)
         self._home_team_id = home_team_id
         self._away_team_id = away_team_id
+        self._p1_id = home_team_id
+        self._p2_id = away_team_id
         self._p1_name = home_team_name
         self._p2_name = away_team_name
 
@@ -557,10 +559,10 @@ class ScoringEngine(QObject):
         if not home_active or not away_active:
             raise RuntimeError("No active players in queues")
 
-        # Determine winner/loser
+        # Determine winner/loser (player IDs for display, team IDs for BoutRecord so undo works)
         if winning_team == "home":
-            winner_id = home_active.player_id
-            loser_id = away_active.player_id
+            winner_player_id = home_active.player_id
+            loser_player_id = away_active.player_id
             self._p1_ap += 1
             self._round_p1_ap += 1
             if result == BoutResult.OPA:
@@ -568,8 +570,8 @@ class ScoringEngine(QObject):
             else:
                 self._p1_oshi_count += 1
         else:
-            winner_id = away_active.player_id
-            loser_id = home_active.player_id
+            winner_player_id = away_active.player_id
+            loser_player_id = home_active.player_id
             self._p2_ap += 1
             self._round_p2_ap += 1
             if result == BoutResult.OPA:
@@ -577,27 +579,32 @@ class ScoringEngine(QObject):
             else:
                 self._p2_oshi_count += 1
 
-        # Create bout record
+        # BoutRecord uses team IDs (_p1_id/_p2_id) so undo_last_bout logic works
         bout_record = BoutRecord(
             round_number=self._current_round,
             bout_number=self._bout_count,
             result=result,
-            winner_id=winner_id,
-            loser_id=loser_id,
+            winner_id=self._p1_id if winning_team == "home" else self._p2_id,
+            loser_id=self._p2_id if winning_team == "home" else self._p1_id,
             time_remaining_ms=time_remaining_ms,
         )
         self._bout_history.append(bout_record)
 
-        # Advance both queues
-        self._home_queue.advance_queue()
-        self._away_queue.advance_queue()
+        # Queue movement (AmpeSports Team mode): only the LOSING team advances.
+        # Winner stays in the Red Zone (Box 1); loser cycles to Box 15 and the
+        # next player from the losing team enters the center to face the winner.
+        losing_team = "away" if winning_team == "home" else "home"
+        if losing_team == "home":
+            self._home_queue.advance_queue()
+        else:
+            self._away_queue.advance_queue()
 
         self.bout_recorded.emit({
             "round": self._current_round,
             "bout": self._bout_count,
             "result": result.value,
-            "winner_id": winner_id,
-            "loser_id": loser_id,
+            "winner_id": winner_player_id,
+            "loser_id": loser_player_id,
             "winning_team": winning_team,
             "time_remaining_ms": time_remaining_ms,
         })

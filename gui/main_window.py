@@ -38,6 +38,8 @@ class MainWindow(QMainWindow):
 
         # Central stacked widget for screen navigation
         self.stack = QStackedWidget()
+        self.stack.setObjectName("main_stack")
+        self.stack.setContentsMargins(16, 16, 16, 16)
         self.setCentralWidget(self.stack)
 
         # Import screens here to avoid circular imports
@@ -66,25 +68,32 @@ class MainWindow(QMainWindow):
     def _build_toolbar(self) -> None:
         """Build the navigation toolbar."""
         tb = QToolBar("Navigation")
+        tb.setObjectName("nav_toolbar")
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, tb)
 
-        # Navigation actions
+        # Navigation actions (checkable for current-screen indication)
         self.action_setup = QAction("Setup Match", self)
+        self.action_setup.setCheckable(True)
+        self.action_setup.setChecked(True)
         self.action_setup.setShortcut(QKeySequence("Ctrl+1"))
         self.action_setup.triggered.connect(lambda: self.navigate_to("setup"))
         tb.addAction(self.action_setup)
 
         self.action_scoring = QAction("Live Scoring", self)
+        self.action_scoring.setCheckable(True)
         self.action_scoring.setShortcut(QKeySequence("Ctrl+2"))
         self.action_scoring.triggered.connect(lambda: self.navigate_to("scoring"))
         tb.addAction(self.action_scoring)
 
         self.action_history = QAction("Match History", self)
+        self.action_history.setCheckable(True)
         self.action_history.setShortcut(QKeySequence("Ctrl+3"))
         self.action_history.triggered.connect(lambda: self.navigate_to("history"))
         tb.addAction(self.action_history)
+
+        self._nav_actions = [self.action_setup, self.action_scoring, self.action_history]
 
         tb.addSeparator()
 
@@ -121,6 +130,8 @@ class MainWindow(QMainWindow):
         }
         if screen in screens:
             self.stack.setCurrentIndex(screens[screen])
+            for i, act in enumerate(self._nav_actions):
+                act.setChecked(i == screens[screen])
             self.status_bar.showMessage(f"Viewing: {screen.title()}")
 
     def set_scoring_engine(self, engine: ScoringEngine) -> None:

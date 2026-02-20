@@ -27,6 +27,12 @@ from engine.scoring import ScoringEngine
 if TYPE_CHECKING:
     from gui.main_window import MainWindow
 
+# Default player names for Team vs Team testing (15 per roster)
+_DEFAULT_ROSTER_NAMES = [
+    "Kofi", "Ama", "Yaw", "Abena", "Kwame", "Akua", "Kweku",
+    "Adwoa", "Kojo", "Afia", "Yaa", "Kwesi", "Akosua", "Esi", "Kofi J.",
+]
+
 
 class TeamRosterWidget(QWidget):
     """
@@ -66,13 +72,20 @@ class TeamRosterWidget(QWidget):
             QScrollArea {
                 border: 1px solid #333355;
                 border-radius: 8px;
-                background-color: #16213E;
+                background-color: #1C1C28;
             }
         """)
 
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(5)
+
+        # Default names for testing Team vs Team (15 per team; prefix by side)
+        prefix = "H" if "Home" in self.team_label else "A"
+        default_names = [
+            f"{prefix}-{_DEFAULT_ROSTER_NAMES[i]}" if i < len(_DEFAULT_ROSTER_NAMES) else f"{prefix}-Player {i + 1}"
+            for i in range(15)
+        ]
 
         # Create 15 player entry rows
         for i in range(15):
@@ -85,9 +98,10 @@ class TeamRosterWidget(QWidget):
             box_label.setStyleSheet("color: #A0A0B0;")
             row.addWidget(box_label)
 
-            # Player name
+            # Player name (pre-filled with default for testing)
             name_input = QLineEdit()
             name_input.setPlaceholderText(f"Player {box_num} name")
+            name_input.setText(default_names[i])
             row.addWidget(name_input)
 
             # Jersey number
@@ -129,10 +143,15 @@ class TeamRosterWidget(QWidget):
         return count
 
     def clear(self) -> None:
-        """Clear all entries."""
+        """Clear all entries and reset to default test names."""
         self.team_name_input.clear()
+        prefix = "H" if "Home" in self.team_label else "A"
+        default_names = [
+            f"{prefix}-{_DEFAULT_ROSTER_NAMES[i]}" if i < len(_DEFAULT_ROSTER_NAMES) else f"{prefix}-Player {i + 1}"
+            for i in range(15)
+        ]
         for i, (name_input, jersey_spin) in enumerate(self.player_entries):
-            name_input.clear()
+            name_input.setText(default_names[i])
             jersey_spin.setValue(i + 1)
 
 
@@ -177,17 +196,18 @@ class MatchSetupWidget(QWidget):
     def _build_ui(self) -> None:
         """Build the setup wizard UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
+        layout.setSpacing(24)
+        layout.setContentsMargins(24, 24, 24, 24)
 
         # Title
         title = QLabel("Match Setup")
-        title.setStyleSheet("font-size: 22pt; font-weight: bold; color: #FCD116;")
+        title.setObjectName("page_title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
         # Step indicator
         self.step_indicator = QLabel("Step 1 of 5: Select Game Mode")
-        self.step_indicator.setStyleSheet("font-size: 10pt; color: #A0A0B0;")
+        self.step_indicator.setObjectName("hint_label")
         self.step_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.step_indicator)
 
@@ -281,21 +301,21 @@ class MatchSetupWidget(QWidget):
         frame.setFixedSize(280, 160)
         frame.setCursor(Qt.CursorShape.PointingHandCursor if enabled else Qt.CursorShape.ForbiddenCursor)
 
-        # Style for the frame
+        # Style for the frame (theme-aligned)
         base_style = """
             QFrame {
-                background-color: #16213E;
-                border: 2px solid #333355;
+                background-color: #1C1C28;
+                border: 2px solid #3A3A4C;
                 border-radius: 12px;
             }
             QFrame:hover {
-                border-color: #555577;
+                border-color: #4A4A5E;
             }
         """
         disabled_style = """
             QFrame {
-                background-color: #0D0D1A;
-                border: 2px solid #222233;
+                background-color: #12121A;
+                border: 2px solid #2A2A38;
                 border-radius: 12px;
             }
         """
@@ -316,7 +336,7 @@ class MatchSetupWidget(QWidget):
         # Title
         title_label = QLabel(title)
         title_label.setStyleSheet(
-            f"font-size: 18pt; font-weight: bold; color: {'#FCD116' if enabled else '#555555'};"
+            f"font-size: 18pt; font-weight: bold; color: {'#E8B923' if enabled else '#6A6A7A'};"
         )
         layout.addWidget(title_label)
 
@@ -341,8 +361,8 @@ class MatchSetupWidget(QWidget):
             # Update frame style to show selection
             frame.setStyleSheet("""
                 QFrame {
-                    background-color: #1A2744;
-                    border: 3px solid #FCD116;
+                    background-color: #222230;
+                    border: 3px solid #E8B923;
                     border-radius: 12px;
                 }
             """)
@@ -350,8 +370,8 @@ class MatchSetupWidget(QWidget):
             # Reset to default style
             frame.setStyleSheet("""
                 QFrame {
-                    background-color: #16213E;
-                    border: 2px solid #333355;
+                    background-color: #1C1C28;
+                    border: 2px solid #3A3A4C;
                     border-radius: 12px;
                 }
                 QFrame:hover {
@@ -395,8 +415,8 @@ class MatchSetupWidget(QWidget):
         format_frame = QFrame()
         format_frame.setStyleSheet("""
             QFrame {
-                background-color: #16213E;
-                border: 2px solid #FCD116;
+                background-color: #1C1C28;
+                border: 2px solid #E8B923;
                 border-radius: 8px;
                 padding: 15px;
             }
@@ -404,7 +424,7 @@ class MatchSetupWidget(QWidget):
         format_inner = QVBoxLayout(format_frame)
 
         format_title = QLabel("Shooter Mode Format")
-        format_title.setStyleSheet("font-size: 12pt; font-weight: bold; color: #FCD116;")
+        format_title.setStyleSheet("font-size: 12pt; font-weight: bold; color: #E8B923;")
         format_inner.addWidget(format_title)
 
         format_details = QLabel(
@@ -503,7 +523,7 @@ class MatchSetupWidget(QWidget):
 
         # VS label
         vs_label = QLabel("VS")
-        vs_label.setStyleSheet("font-size: 16pt; font-weight: bold; color: #FCD116;")
+        vs_label.setStyleSheet("font-size: 16pt; font-weight: bold; color: #E8B923;")
         vs_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         players_layout.addWidget(vs_label)
 
@@ -563,7 +583,7 @@ class MatchSetupWidget(QWidget):
         vs_layout = QVBoxLayout(vs_frame)
         vs_layout.addStretch()
         vs_label = QLabel("VS")
-        vs_label.setStyleSheet("font-size: 18pt; font-weight: bold; color: #FCD116;")
+        vs_label.setStyleSheet("font-size: 18pt; font-weight: bold; color: #E8B923;")
         vs_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vs_layout.addWidget(vs_label)
         vs_layout.addStretch()
@@ -639,7 +659,7 @@ class MatchSetupWidget(QWidget):
         instruction_frame.setStyleSheet("""
             QFrame {
                 background-color: #1A2744;
-                border: 2px solid #FCD116;
+                border: 2px solid #E8B923;
                 border-radius: 8px;
                 padding: 10px;
             }
@@ -647,7 +667,7 @@ class MatchSetupWidget(QWidget):
         instruction_layout = QVBoxLayout(instruction_frame)
 
         instruction_icon = QLabel("CONDUCT TOSS NOW")
-        instruction_icon.setStyleSheet("font-size: 12pt; font-weight: bold; color: #FCD116;")
+        instruction_icon.setStyleSheet("font-size: 12pt; font-weight: bold; color: #E8B923;")
         instruction_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         instruction_layout.addWidget(instruction_icon)
 
@@ -711,7 +731,7 @@ class MatchSetupWidget(QWidget):
         self.summary_frame = QFrame()
         self.summary_frame.setStyleSheet("""
             QFrame {
-                background-color: #16213E;
+                background-color: #1C1C28;
                 border: 1px solid #333355;
                 border-radius: 8px;
                 padding: 15px;
@@ -720,7 +740,7 @@ class MatchSetupWidget(QWidget):
         summary_layout = QVBoxLayout(self.summary_frame)
 
         summary_title = QLabel("Match Summary")
-        summary_title.setStyleSheet("font-weight: bold; color: #FCD116;")
+        summary_title.setStyleSheet("font-weight: bold; color: #E8B923;")
         summary_layout.addWidget(summary_title)
 
         self.summary_label = QLabel()
