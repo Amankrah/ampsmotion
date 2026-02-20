@@ -22,7 +22,9 @@ from PySide6.QtCore import Qt, Signal
 from services.event_bus import EventBus
 from models.match import GameMode
 from models.player import AgeCategory
+from models.base import get_session
 from engine.scoring import ScoringEngine
+from engine.tournament_bracket import TournamentBracket
 
 if TYPE_CHECKING:
     from gui.main_window import MainWindow
@@ -187,6 +189,10 @@ class MatchSetupWidget(QWidget):
         self.home_roster_widget: Optional[TeamRosterWidget] = None
         self.away_roster_widget: Optional[TeamRosterWidget] = None
 
+        # Tournament info
+        self.tournament_bracket: Optional[TournamentBracket] = None
+        self.tournament_teams: list[dict] = []  # [{"id": 1, "name": "Team A"}, ...]
+
         # Toss info
         self.toss_winner = ""
         self.toss_choice = ""
@@ -280,12 +286,12 @@ class MatchSetupWidget(QWidget):
         )
         modes_layout.addWidget(frame_team)
 
-        # Tournament Mode (disabled - Phase 4)
+        # Tournament Mode
         frame_tournament, btn_tournament = self._create_mode_card(
             "Tournament",
-            "Bracket competition\nGroup stage to Finals\n(Coming Soon)",
+            "Bracket competition\nGroup stage to Finals\n16 teams required",
             GameMode.TOURNAMENT,
-            enabled=False
+            enabled=True
         )
         modes_layout.addWidget(frame_tournament)
 
@@ -442,6 +448,40 @@ class MatchSetupWidget(QWidget):
         team_layout.addStretch()
         self.step2_stack.addWidget(team_widget)
 
+        # Page 2: Tournament Configuration
+        tournament_widget = QWidget()
+        tournament_layout = QVBoxLayout(tournament_widget)
+
+        tournament_frame = QFrame()
+        tournament_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1C1C28;
+                border: 2px solid #E8B923;
+                border-radius: 8px;
+                padding: 15px;
+            }
+        """)
+        tournament_inner = QVBoxLayout(tournament_frame)
+
+        tournament_title = QLabel("Tournament Format")
+        tournament_title.setStyleSheet("font-size: 12pt; font-weight: bold; color: #E8B923;")
+        tournament_inner.addWidget(tournament_title)
+
+        tournament_details = QLabel(
+            "• 16 Teams required\n"
+            "• 4 Groups of 4 teams each\n"
+            "• Round-robin group stage\n"
+            "• Top 2 from each group advance\n"
+            "• Knockout: R16 → QF → SF → Final\n"
+            "• Head-to-head tiebreakers applied"
+        )
+        tournament_details.setStyleSheet("font-size: 10pt; color: #A0A0B0;")
+        tournament_inner.addWidget(tournament_details)
+
+        tournament_layout.addWidget(tournament_frame)
+        tournament_layout.addStretch()
+        self.step2_stack.addWidget(tournament_widget)
+
         layout.addWidget(self.step2_stack)
 
         # Age category (applies to both modes)
@@ -466,7 +506,10 @@ class MatchSetupWidget(QWidget):
 
     def _switch_step2_mode(self) -> None:
         """Switch step 2 UI based on game mode."""
-        if self.game_mode == GameMode.TEAM_VS_TEAM:
+        if self.game_mode == GameMode.TOURNAMENT:
+            self.step2_stack.setCurrentIndex(2)  # Tournament format info
+            self.total_rounds = 15  # Fixed 15 rounds per game in tournament mode
+        elif self.game_mode == GameMode.TEAM_VS_TEAM:
             self.step2_stack.setCurrentIndex(1)  # Team format info
             self.total_rounds = 15  # Fixed 15 rounds per game in team mode
         else:
@@ -488,6 +531,9 @@ class MatchSetupWidget(QWidget):
 
         # Page 1: Team Roster Entry
         self.step3_stack.addWidget(self._create_team_roster_entry())
+
+        # Page 2: Tournament Teams Entry
+        self.step3_stack.addWidget(self._create_tournament_teams_entry())
 
         return widget
 
@@ -594,6 +640,88 @@ class MatchSetupWidget(QWidget):
         teams_layout.addWidget(self.away_roster_widget)
 
         layout.addLayout(teams_layout)
+
+        return widget
+
+    def _create_tournament_teams_entry(self) -> QWidget:
+        """Create the Tournament teams entry UI (16 teams)."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+
+        # Header
+        header_layout = QHBoxLayout()
+        label = QLabel("Enter Tournament Teams")
+        label.setStyleSheet("font-size: 13pt; font-weight: bold;")
+        header_layout.addWidget(label)
+
+        header_layout.addStretch()
+
+        info_label = QLabel("16 teams required (4 groups × 4 teams)")
+        info_label.setStyleSheet("color: #A0A0B0; font-style: italic;")
+        header_layout.addWidget(info_label)
+
+        layout.addLayout(header_layout)
+
+        # Scrollable team list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #333355;
+                border-radius: 8px;
+                background-color: #1C1C28;
+            }
+        """)
+
+        scroll_content = QWidget()
+        scroll_layout = QGridLayout(scroll_content)
+        scroll_layout.setSpacing(10)
+
+        # Store team name inputs
+        self.tournament_team_inputs: list[QLineEdit] = []
+
+        # Create 16 team entry rows in a 2-column grid
+        default_team_names = [
+            "Lions FC", "Eagles United", "Thunder SC", "Phoenix FC",
+            "Dragons AC", "Wolves FC", "Tigers SC", "Panthers United",
+            "Hawks FC", "Falcons SC", "Cobras United", "Vipers FC",
+            "Sharks SC", "Dolphins FC", "Stallions United", "Bulls FC"
+        ]
+
+        for i in range(16):
+            row = i % 8
+            col = i // 8
+
+            # Container for each team entry
+            team_container = QHBoxLayout()
+
+            # Seed number
+            seed_label = QLabel(f"#{i + 1:2d}")
+            seed_label.setFixedWidth(30)
+            seed_label.setStyleSheet("color: #E8B923; font-weight: bold;")
+            team_container.addWidget(seed_label)
+
+            # Team name input
+            name_input = QLineEdit()
+            name_input.setPlaceholderText(f"Team {i + 1} name")
+            name_input.setText(default_team_names[i])
+            team_container.addWidget(name_input)
+
+            self.tournament_team_inputs.append(name_input)
+
+            # Add to grid
+            container_widget = QWidget()
+            container_widget.setLayout(team_container)
+            scroll_layout.addWidget(container_widget, row, col)
+
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+
+        # Group preview
+        preview_label = QLabel("Teams will be seeded into 4 groups using serpentine seeding")
+        preview_label.setStyleSheet("color: #A0A0B0; font-style: italic;")
+        layout.addWidget(preview_label)
 
         return widget
 
@@ -783,10 +911,17 @@ class MatchSetupWidget(QWidget):
             if current + 1 == self.steps.count() - 1:
                 self._update_summary()
                 self._update_toss_labels()
+                # Update button text for tournament mode
+                if self.game_mode == GameMode.TOURNAMENT:
+                    self.btn_start.setText("Create Tournament ▶")
+                else:
+                    self.btn_start.setText("Start Match ▶")
 
     def _switch_step3_mode(self) -> None:
-        """Switch step 3 UI between 1v1 and team mode."""
-        if self.game_mode == GameMode.TEAM_VS_TEAM:
+        """Switch step 3 UI between 1v1, team, and tournament mode."""
+        if self.game_mode == GameMode.TOURNAMENT:
+            self.step3_stack.setCurrentIndex(2)  # Tournament teams entry
+        elif self.game_mode == GameMode.TEAM_VS_TEAM:
             self.step3_stack.setCurrentIndex(1)  # Team roster entry
         else:
             self.step3_stack.setCurrentIndex(0)  # 1v1 player entry
@@ -794,7 +929,30 @@ class MatchSetupWidget(QWidget):
     def _validate_step(self, step: int) -> bool:
         """Validate the current step before proceeding."""
         if step == 2:  # Players/Teams step
-            if self.game_mode == GameMode.TEAM_VS_TEAM:
+            if self.game_mode == GameMode.TOURNAMENT:
+                # Validate tournament teams
+                filled_teams = [
+                    inp.text().strip()
+                    for inp in self.tournament_team_inputs
+                    if inp.text().strip()
+                ]
+                if len(filled_teams) < 16:
+                    QMessageBox.warning(
+                        self,
+                        "Incomplete Teams",
+                        f"Tournament requires 16 teams.\n\n"
+                        f"Currently entered: {len(filled_teams)}/16 teams"
+                    )
+                    return False
+                # Check for duplicate names
+                if len(filled_teams) != len(set(filled_teams)):
+                    QMessageBox.warning(
+                        self,
+                        "Duplicate Names",
+                        "Each team must have a unique name."
+                    )
+                    return False
+            elif self.game_mode == GameMode.TEAM_VS_TEAM:
                 # Validate team rosters
                 if not self.home_roster_widget or not self.away_roster_widget:
                     return False
@@ -860,7 +1018,22 @@ class MatchSetupWidget(QWidget):
             GameMode.TOURNAMENT: "Tournament",
         }
 
-        if self.game_mode == GameMode.TEAM_VS_TEAM:
+        if self.game_mode == GameMode.TOURNAMENT:
+            team_count = sum(1 for inp in self.tournament_team_inputs if inp.text().strip())
+            team_names = [inp.text().strip() for inp in self.tournament_team_inputs[:4] if inp.text().strip()]
+            preview = ", ".join(team_names) + "..." if len(team_names) >= 4 else ", ".join(team_names)
+
+            summary = f"""
+Mode: {mode_names.get(self.game_mode, 'Unknown')}
+Format: 4 Groups → Knockout (R16 → QF → SF → Final)
+Age Category: {self.age_combo.currentText()}
+
+Teams: {team_count}/16 registered
+Preview: {preview}
+
+Note: Toss is conducted before each individual match.
+            """
+        elif self.game_mode == GameMode.TEAM_VS_TEAM:
             home_name = self.home_roster_widget.get_team_name() if self.home_roster_widget else "Not set"
             away_name = self.away_roster_widget.get_team_name() if self.away_roster_widget else "Not set"
             home_count = self.home_roster_widget.get_filled_count() if self.home_roster_widget else 0
@@ -887,20 +1060,41 @@ Player 2: {self.p2_name.text() or 'Not set'}
 
     def _update_toss_labels(self) -> None:
         """Update toss step labels based on game mode."""
-        if self.game_mode == GameMode.TEAM_VS_TEAM:
+        if self.game_mode == GameMode.TOURNAMENT:
+            # Tournament mode - toss is per match, not at setup
+            self.toss_p1.setText("N/A (Per-Match)")
+            self.toss_p2.setText("N/A (Per-Match)")
+            self.toss_p1.setEnabled(False)
+            self.toss_p2.setEnabled(False)
+            self.choice_opa.setEnabled(False)
+            self.choice_oshi.setEnabled(False)
+        elif self.game_mode == GameMode.TEAM_VS_TEAM:
             home_name = self.home_roster_widget.get_team_name() if self.home_roster_widget else "Home Team"
             away_name = self.away_roster_widget.get_team_name() if self.away_roster_widget else "Away Team"
             self.toss_p1.setText(home_name or "Home Team")
             self.toss_p2.setText(away_name or "Away Team")
+            self.toss_p1.setEnabled(True)
+            self.toss_p2.setEnabled(True)
+            self.choice_opa.setEnabled(True)
+            self.choice_oshi.setEnabled(True)
         else:
             p1_name = self.p1_name.text().strip() or "Player 1"
             p2_name = self.p2_name.text().strip() or "Player 2"
             self.toss_p1.setText(p1_name)
             self.toss_p2.setText(p2_name)
+            self.toss_p1.setEnabled(True)
+            self.toss_p2.setEnabled(True)
+            self.choice_opa.setEnabled(True)
+            self.choice_oshi.setEnabled(True)
 
     def _start_match(self) -> None:
         """Create the scoring engine and start the match."""
-        # Validate toss has been recorded
+        # Tournament mode has different flow
+        if self.game_mode == GameMode.TOURNAMENT:
+            self._start_tournament()
+            return
+
+        # Validate toss has been recorded (not needed for tournament)
         toss_winner_selected = self.toss_p1.isChecked() or self.toss_p2.isChecked()
         toss_choice_selected = self.choice_opa.isChecked() or self.choice_oshi.isChecked()
 
@@ -986,6 +1180,74 @@ Player 2: {self.p2_name.text() or 'Not set'}
 
         self.main_window.start_match_scoring()
 
+    def _start_tournament(self) -> None:
+        """Create and start a tournament."""
+        # Collect team data
+        teams = []
+        for i, inp in enumerate(self.tournament_team_inputs):
+            name = inp.text().strip()
+            if name:
+                teams.append({"id": i + 1, "name": name})
+
+        if len(teams) != 16:
+            QMessageBox.warning(
+                self,
+                "Incomplete Teams",
+                f"Tournament requires exactly 16 teams.\n"
+                f"Currently entered: {len(teams)}/16"
+            )
+            return
+
+        # Create tournament bracket
+        self.tournament_bracket = TournamentBracket()
+        self.tournament_bracket.initialize_tournament(
+            teams=teams,
+            num_groups=4,
+            teams_per_group=4
+        )
+
+        # Save to database
+        try:
+            with get_session() as session:
+                from models.tournament import Tournament as TournamentModel
+
+                # Create tournament record
+                tournament = TournamentModel(
+                    name=f"Tournament {len(teams)} Teams",
+                    num_groups=4,
+                    teams_per_group=4,
+                    team_count=16,
+                )
+                session.add(tournament)
+                session.flush()
+
+                # Update bracket with tournament ID
+                self.tournament_bracket.tournament_id = tournament.id
+
+                # Save bracket state
+                tournament.update_from_bracket(self.tournament_bracket)
+                session.commit()
+
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Database Error",
+                f"Failed to save tournament: {e}\n\n"
+                "Tournament will continue without persistence."
+            )
+
+        # Emit event
+        self.event_bus.match_created.emit({
+            "mode": GameMode.TOURNAMENT.value,
+            "tournament_id": self.tournament_bracket.tournament_id,
+            "team_count": len(teams),
+            "groups": 4,
+        })
+
+        # Navigate to tournament bracket view
+        self.main_window.set_tournament_bracket(self.tournament_bracket)
+        self.main_window.show_tournament_view()
+
     def reset(self) -> None:
         """Reset the wizard to initial state."""
         self.steps.setCurrentIndex(0)
@@ -1000,6 +1262,21 @@ Player 2: {self.p2_name.text() or 'Not set'}
             self.home_roster_widget.clear()
         if self.away_roster_widget:
             self.away_roster_widget.clear()
+
+        # Reset tournament team inputs with default names
+        if hasattr(self, 'tournament_team_inputs'):
+            default_team_names = [
+                "Lions FC", "Eagles United", "Thunder SC", "Phoenix FC",
+                "Dragons AC", "Wolves FC", "Tigers SC", "Panthers United",
+                "Hawks FC", "Falcons SC", "Cobras United", "Vipers FC",
+                "Sharks SC", "Dolphins FC", "Stallions United", "Bulls FC"
+            ]
+            for i, inp in enumerate(self.tournament_team_inputs):
+                inp.setText(default_team_names[i])
+
+        # Reset tournament state
+        self.tournament_bracket = None
+        self.tournament_teams = []
 
         # Reset step stacks to default (1v1 mode)
         self.step2_stack.setCurrentIndex(0)

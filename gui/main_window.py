@@ -16,6 +16,7 @@ from PySide6.QtGui import QAction, QKeySequence
 
 from services.event_bus import EventBus
 from engine.scoring import ScoringEngine, ScoreState
+from engine.tournament_bracket import TournamentBracket
 
 
 class MainWindow(QMainWindow):
@@ -32,6 +33,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.event_bus = event_bus
         self.scoring_engine: Optional[ScoringEngine] = None
+        self.tournament_bracket: Optional[TournamentBracket] = None
 
         self.setWindowTitle("AmpsMotion — Ampfre Console")
         self.setMinimumSize(1280, 800)
@@ -46,16 +48,19 @@ class MainWindow(QMainWindow):
         from gui.widgets.match_setup import MatchSetupWidget
         from gui.widgets.scoring_panel import ScoringScreen
         from gui.widgets.match_history import MatchHistoryWidget
+        from gui.widgets.tournament_bracket import TournamentBracketWidget
 
         # Create screens
         self.match_setup_screen = MatchSetupWidget(event_bus, self)
         self.scoring_screen = ScoringScreen(event_bus, self)
         self.history_screen = MatchHistoryWidget(event_bus)
+        self.tournament_screen = TournamentBracketWidget(event_bus)
 
         # Add screens to stack
         self.stack.addWidget(self.match_setup_screen)   # index 0
         self.stack.addWidget(self.scoring_screen)       # index 1
         self.stack.addWidget(self.history_screen)       # index 2
+        self.stack.addWidget(self.tournament_screen)    # index 3
 
         # Build UI
         self._build_toolbar()
@@ -93,7 +98,13 @@ class MainWindow(QMainWindow):
         self.action_history.triggered.connect(lambda: self.navigate_to("history"))
         tb.addAction(self.action_history)
 
-        self._nav_actions = [self.action_setup, self.action_scoring, self.action_history]
+        self.action_tournament = QAction("Tournament", self)
+        self.action_tournament.setCheckable(True)
+        self.action_tournament.setShortcut(QKeySequence("Ctrl+4"))
+        self.action_tournament.triggered.connect(lambda: self.navigate_to("tournament"))
+        tb.addAction(self.action_tournament)
+
+        self._nav_actions = [self.action_setup, self.action_scoring, self.action_history, self.action_tournament]
 
         tb.addSeparator()
 
@@ -127,6 +138,7 @@ class MainWindow(QMainWindow):
             "setup": 0,
             "scoring": 1,
             "history": 2,
+            "tournament": 3,
         }
         if screen in screens:
             self.stack.setCurrentIndex(screens[screen])
@@ -144,6 +156,18 @@ class MainWindow(QMainWindow):
         self.navigate_to("scoring")
         self.status_bar.showMessage("Match in progress")
         self.status_match.setText("Match active — Click 'Start Round' to begin")
+
+    def set_tournament_bracket(self, bracket: TournamentBracket) -> None:
+        """Set the active tournament bracket."""
+        self.tournament_bracket = bracket
+        self.tournament_screen.set_tournament(bracket)
+
+    def show_tournament_view(self) -> None:
+        """Switch to the tournament bracket view."""
+        self.navigate_to("tournament")
+        self.status_bar.showMessage("Tournament in progress")
+        stage = self.tournament_bracket.current_stage.value if self.tournament_bracket else "setup"
+        self.status_match.setText(f"Tournament — Stage: {stage.replace('_', ' ').title()}")
 
     def _open_audience_display(self) -> None:
         """Open the audience display window."""
