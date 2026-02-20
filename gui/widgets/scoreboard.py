@@ -39,12 +39,12 @@ class ScoreboardWidget(QWidget):
         center = QVBoxLayout()
 
         self.vs_label = QLabel("VS")
-        self.vs_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FCD116;")
+        self.vs_label.setStyleSheet("font-size: 24pt; font-weight: bold; color: #FCD116;")
         self.vs_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         center.addWidget(self.vs_label)
 
         self.round_label = QLabel("Round 0/0")
-        self.round_label.setStyleSheet("font-size: 14px; color: #A0A0B0;")
+        self.round_label.setStyleSheet("font-size: 14pt; color: #A0A0B0;")
         self.round_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         center.addWidget(self.round_label)
 
@@ -73,19 +73,19 @@ class ScoreboardWidget(QWidget):
 
         name = QLabel("Player")
         name.setObjectName("name")
-        name.setStyleSheet("font-size: 14px; font-weight: bold;")
+        name.setStyleSheet("font-size: 14pt; font-weight: bold;")
         name.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(name)
 
         score = QLabel("0")
         score.setObjectName("score")
-        score.setStyleSheet("font-size: 36px; font-weight: bold; color: #FCD116;")
+        score.setStyleSheet("font-size: 36pt; font-weight: bold; color: #FCD116;")
         score.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(score)
 
         stats = QLabel("O: 0 | S: 0")
         stats.setObjectName("stats")
-        stats.setStyleSheet("font-size: 11px; color: #666;")
+        stats.setStyleSheet("font-size: 11pt; color: #666;")
         stats.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(stats)
 

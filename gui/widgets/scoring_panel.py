@@ -61,7 +61,7 @@ class ScoringPanel(QWidget):
 
         # Title
         title = QLabel("Bout Recording")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #FCD116;")
+        title.setStyleSheet("font-size: 12pt; font-weight: bold; color: #FCD116;")
         layout.addWidget(title)
 
         # Opa/Oshi buttons
@@ -89,12 +89,12 @@ class ScoringPanel(QWidget):
         self.winner_group = QButtonGroup(self)
 
         self.btn_p1_wins = QRadioButton("Player 1")
-        self.btn_p1_wins.setStyleSheet("font-size: 14px; padding: 10px;")
+        self.btn_p1_wins.setStyleSheet("font-size: 10pt; padding: 10px;")
         self.winner_group.addButton(self.btn_p1_wins, 1)
         winner_layout.addWidget(self.btn_p1_wins)
 
         self.btn_p2_wins = QRadioButton("Player 2")
-        self.btn_p2_wins.setStyleSheet("font-size: 14px; padding: 10px;")
+        self.btn_p2_wins.setStyleSheet("font-size: 10pt; padding: 10px;")
         self.winner_group.addButton(self.btn_p2_wins, 2)
         winner_layout.addWidget(self.btn_p2_wins)
 
@@ -107,19 +107,19 @@ class ScoringPanel(QWidget):
 
         self.btn_record = QPushButton("✓ Record Bout")
         self.btn_record.setStyleSheet(
-            "background-color: #006B3F; font-size: 14px; padding: 12px 24px;"
+            "background-color: #006B3F; font-size: 10pt; padding: 12px 24px;"
         )
         self.btn_record.clicked.connect(self._record_bout)
         self.btn_record.setEnabled(False)
         actions_layout.addWidget(self.btn_record)
 
         self.btn_foul = QPushButton("⚠ Foul")
-        self.btn_foul.setStyleSheet("font-size: 14px; padding: 12px 24px;")
+        self.btn_foul.setStyleSheet("font-size: 10pt; padding: 12px 24px;")
         self.btn_foul.clicked.connect(self._open_foul_dialog)
         actions_layout.addWidget(self.btn_foul)
 
         self.btn_undo = QPushButton("↩ Undo")
-        self.btn_undo.setStyleSheet("font-size: 14px; padding: 12px 24px;")
+        self.btn_undo.setStyleSheet("font-size: 10pt; padding: 12px 24px;")
         self.btn_undo.clicked.connect(self._undo_bout)
         actions_layout.addWidget(self.btn_undo)
 
@@ -230,7 +230,7 @@ class ScoringScreen(QWidget):
         top_bar = QHBoxLayout()
 
         self.round_label = QLabel("ROUND 0 / 0")
-        self.round_label.setStyleSheet("font-size: 24px; font-weight: bold;")
+        self.round_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
         top_bar.addWidget(self.round_label)
 
         top_bar.addStretch()
@@ -238,7 +238,7 @@ class ScoringScreen(QWidget):
         self.timer_label = QLabel("01:00")
         self.timer_label.setObjectName("timer_display")
         self.timer_label.setStyleSheet(
-            "font-size: 48px; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
+            "font-size: 32pt; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
         )
         top_bar.addWidget(self.timer_label)
 
@@ -286,7 +286,7 @@ class ScoringScreen(QWidget):
 
         self.btn_start_round = QPushButton("Start Round")
         self.btn_start_round.setStyleSheet(
-            "background-color: #006B3F; font-size: 14px; padding: 12px 24px;"
+            "background-color: #006B3F; font-size: 10pt; padding: 12px 24px;"
         )
         self.btn_start_round.clicked.connect(self._start_round)
         controls.addWidget(self.btn_start_round)
@@ -327,24 +327,24 @@ class ScoringScreen(QWidget):
 
         name_label = QLabel("Player")
         name_label.setObjectName("player_name")
-        name_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #FCD116;")
+        name_label.setStyleSheet("font-size: 13pt; font-weight: bold; color: #FCD116;")
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(name_label)
 
         score_label = QLabel("0")
         score_label.setObjectName("player_score")
-        score_label.setStyleSheet("font-size: 72px; font-weight: bold;")
+        score_label.setStyleSheet("font-size: 48pt; font-weight: bold;")
         score_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(score_label)
 
         ap_label = QLabel("AP")
-        ap_label.setStyleSheet("font-size: 14px; color: #A0A0B0;")
+        ap_label.setStyleSheet("font-size: 10pt; color: #A0A0B0;")
         ap_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(ap_label)
 
         stats_label = QLabel("Opa: 0 | Oshi: 0")
         stats_label.setObjectName("player_stats")
-        stats_label.setStyleSheet("font-size: 12px; color: #666;")
+        stats_label.setStyleSheet("font-size: 9pt; color: #666;")
         stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(stats_label)
 
@@ -538,15 +538,15 @@ class ScoringScreen(QWidget):
         # Color changes for warnings
         if remaining_ms < 10000:
             self.timer_label.setStyleSheet(
-                "font-size: 48px; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #FF4444;"
+                "font-size: 32pt; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #FF4444;"
             )
         elif remaining_ms < 30000:
             self.timer_label.setStyleSheet(
-                "font-size: 48px; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #FFB74D;"
+                "font-size: 32pt; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #FFB74D;"
             )
         else:
             self.timer_label.setStyleSheet(
-                "font-size: 48px; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
+                "font-size: 32pt; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
             )
 
     @Slot()
@@ -619,7 +619,7 @@ class ScoringScreen(QWidget):
         # Reset timer display
         self.timer_label.setText("01:00")
         self.timer_label.setStyleSheet(
-            "font-size: 48px; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
+            "font-size: 32pt; font-weight: bold; font-family: 'JetBrains Mono', monospace; color: #00CC00;"
         )
 
         # Show round result

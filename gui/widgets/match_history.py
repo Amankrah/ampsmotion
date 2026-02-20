@@ -36,7 +36,7 @@ class MatchHistoryWidget(QWidget):
 
         # Title
         title = QLabel("Match History")
-        title.setStyleSheet("font-size: 32px; font-weight: bold; color: #FCD116;")
+        title.setStyleSheet("font-size: 32pt; font-weight: bold; color: #FCD116;")
         layout.addWidget(title)
 
         # Toolbar
@@ -73,7 +73,7 @@ class MatchHistoryWidget(QWidget):
             "Complete a match to see it here.\n"
             "Match data is saved automatically."
         )
-        self.placeholder.setStyleSheet("font-size: 14px; color: #666;")
+        self.placeholder.setStyleSheet("font-size: 14pt; color: #666;")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.placeholder)
 

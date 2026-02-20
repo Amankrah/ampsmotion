@@ -69,13 +69,13 @@ class MatchSetupWidget(QWidget):
 
         # Title
         title = QLabel("Match Setup")
-        title.setStyleSheet("font-size: 32px; font-weight: bold; color: #FCD116;")
+        title.setStyleSheet("font-size: 22pt; font-weight: bold; color: #FCD116;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
         # Step indicator
         self.step_indicator = QLabel("Step 1 of 5: Select Game Mode")
-        self.step_indicator.setStyleSheet("font-size: 14px; color: #A0A0B0;")
+        self.step_indicator.setStyleSheet("font-size: 10pt; color: #A0A0B0;")
         self.step_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.step_indicator)
 
@@ -108,7 +108,7 @@ class MatchSetupWidget(QWidget):
         self.btn_start.clicked.connect(self._start_match)
         self.btn_start.setVisible(False)
         self.btn_start.setStyleSheet(
-            "background-color: #006B3F; font-size: 16px; padding: 15px 30px;"
+            "background-color: #006B3F; font-size: 12pt; padding: 15px 30px;"
         )
         nav_layout.addWidget(self.btn_start)
 
@@ -121,92 +121,131 @@ class MatchSetupWidget(QWidget):
         layout.setSpacing(20)
 
         label = QLabel("Select Game Mode")
-        label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        label.setStyleSheet("font-size: 18pt; font-weight: bold;")
         layout.addWidget(label)
 
-        # Mode buttons
+        # Mode buttons using clickable frames
         modes_layout = QHBoxLayout()
         modes_layout.setSpacing(20)
 
         self.mode_group = QButtonGroup(self)
 
         # 1v1 Mode
-        btn_1v1 = self._create_mode_button(
+        frame_1v1, btn_1v1 = self._create_mode_card(
             "1 vs 1",
             "Individual match\n5, 10, or 15 rounds\n60 seconds per round",
             GameMode.ONE_VS_ONE
         )
         btn_1v1.setChecked(True)
         self.game_mode = GameMode.ONE_VS_ONE
-        modes_layout.addWidget(btn_1v1)
+        modes_layout.addWidget(frame_1v1)
 
         # Team Mode
-        btn_team = self._create_mode_button(
+        frame_team, btn_team = self._create_mode_card(
             "Team vs Team",
-            "Shooter Mode\n3 games × 15 rounds\n15 players per team",
+            "Shooter Mode\n3 games x 15 rounds\n15 players per team",
             GameMode.TEAM_VS_TEAM
         )
-        modes_layout.addWidget(btn_team)
+        modes_layout.addWidget(frame_team)
 
-        # Tournament Mode
-        btn_tournament = self._create_mode_button(
+        # Tournament Mode (disabled - Phase 4)
+        frame_tournament, btn_tournament = self._create_mode_card(
             "Tournament",
-            "Bracket competition\nGroup stage to Finals\nMultiple teams",
-            GameMode.TOURNAMENT
+            "Bracket competition\nGroup stage to Finals\n(Coming Soon)",
+            GameMode.TOURNAMENT,
+            enabled=False
         )
-        btn_tournament.setEnabled(False)  # Phase 4
-        modes_layout.addWidget(btn_tournament)
+        modes_layout.addWidget(frame_tournament)
 
         layout.addLayout(modes_layout)
         layout.addStretch()
 
         return widget
 
-    def _create_mode_button(self, title: str, description: str, mode: GameMode) -> QRadioButton:
-        """Create a styled radio button for mode selection."""
-        btn = QRadioButton()
-        btn.setStyleSheet("""
-            QRadioButton {
+    def _create_mode_card(self, title: str, description: str, mode: GameMode,
+                          enabled: bool = True) -> tuple[QFrame, QRadioButton]:
+        """Create a clickable card for mode selection."""
+        frame = QFrame()
+        frame.setFixedSize(280, 160)
+        frame.setCursor(Qt.CursorShape.PointingHandCursor if enabled else Qt.CursorShape.ForbiddenCursor)
+
+        # Style for the frame
+        base_style = """
+            QFrame {
                 background-color: #16213E;
                 border: 2px solid #333355;
                 border-radius: 12px;
-                padding: 20px;
-                min-width: 200px;
-                min-height: 120px;
             }
-            QRadioButton:checked {
-                border-color: #FCD116;
-                background-color: #1A2744;
-            }
-            QRadioButton:hover {
+            QFrame:hover {
                 border-color: #555577;
             }
-            QRadioButton::indicator {
-                width: 0;
-                height: 0;
+        """
+        disabled_style = """
+            QFrame {
+                background-color: #0D0D1A;
+                border: 2px solid #222233;
+                border-radius: 12px;
             }
-        """)
+        """
+        frame.setStyleSheet(base_style if enabled else disabled_style)
 
-        # Create label layout inside
-        container = QWidget()
-        container_layout = QVBoxLayout(container)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
 
+        # Hidden radio button for selection tracking
+        radio = QRadioButton()
+        radio.setVisible(False)
+        radio.setEnabled(enabled)
+        self.mode_group.addButton(radio)
+        radio.toggled.connect(lambda checked, m=mode, f=frame: self._on_mode_toggled(checked, m, f))
+        layout.addWidget(radio)
+
+        # Title
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #FCD116;")
-        container_layout.addWidget(title_label)
+        title_label.setStyleSheet(
+            f"font-size: 18pt; font-weight: bold; color: {'#FCD116' if enabled else '#555555'};"
+        )
+        layout.addWidget(title_label)
 
+        # Description
         desc_label = QLabel(description)
-        desc_label.setStyleSheet("font-size: 12px; color: #A0A0B0;")
-        container_layout.addWidget(desc_label)
+        desc_label.setStyleSheet(f"font-size: 11pt; color: {'#A0A0B0' if enabled else '#444444'};")
+        desc_label.setWordWrap(True)
+        layout.addWidget(desc_label)
 
-        self.mode_group.addButton(btn)
-        btn.toggled.connect(lambda checked, m=mode: self._set_mode(m) if checked else None)
+        layout.addStretch()
 
-        return btn
+        # Make frame clickable
+        if enabled:
+            frame.mousePressEvent = lambda e, r=radio: r.setChecked(True)
 
-    def _set_mode(self, mode: GameMode) -> None:
-        """Set the selected game mode."""
-        self.game_mode = mode
+        return frame, radio
+
+    def _on_mode_toggled(self, checked: bool, mode: GameMode, frame: QFrame) -> None:
+        """Handle mode selection toggle."""
+        if checked:
+            self.game_mode = mode
+            # Update frame style to show selection
+            frame.setStyleSheet("""
+                QFrame {
+                    background-color: #1A2744;
+                    border: 3px solid #FCD116;
+                    border-radius: 12px;
+                }
+            """)
+        else:
+            # Reset to default style
+            frame.setStyleSheet("""
+                QFrame {
+                    background-color: #16213E;
+                    border: 2px solid #333355;
+                    border-radius: 12px;
+                }
+                QFrame:hover {
+                    border-color: #555577;
+                }
+            """)
 
     def _create_step2_config(self) -> QWidget:
         """Step 2: Match Configuration."""
@@ -215,7 +254,7 @@ class MatchSetupWidget(QWidget):
         layout.setSpacing(20)
 
         label = QLabel("Match Configuration")
-        label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         layout.addWidget(label)
 
         form = QFormLayout()
@@ -251,7 +290,7 @@ class MatchSetupWidget(QWidget):
         layout.setSpacing(20)
 
         label = QLabel("Enter Player Information")
-        label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         layout.addWidget(label)
 
         # Two-column layout for players
@@ -276,7 +315,7 @@ class MatchSetupWidget(QWidget):
 
         # VS label
         vs_label = QLabel("VS")
-        vs_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FCD116;")
+        vs_label.setStyleSheet("font-size: 16pt; font-weight: bold; color: #FCD116;")
         vs_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         players_layout.addWidget(vs_label)
 
@@ -308,7 +347,7 @@ class MatchSetupWidget(QWidget):
         layout.setSpacing(20)
 
         label = QLabel("Assign Officials")
-        label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         layout.addWidget(label)
 
         form = QFormLayout()
@@ -354,7 +393,7 @@ class MatchSetupWidget(QWidget):
         layout.setSpacing(20)
 
         label = QLabel("Record Toss Result")
-        label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         layout.addWidget(label)
 
         # Toss winner

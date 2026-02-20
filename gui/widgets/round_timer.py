@@ -32,7 +32,7 @@ class RoundTimerWidget(QWidget):
         self.time_label.setObjectName("timer_display")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.time_label.setStyleSheet("""
-            font-size: 72px;
+            font-size: 72pt;
             font-weight: bold;
             font-family: 'JetBrains Mono', 'Consolas', monospace;
             color: #00CC00;
@@ -42,7 +42,7 @@ class RoundTimerWidget(QWidget):
         # Status label
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("font-size: 14px; color: #A0A0B0;")
+        self.status_label.setStyleSheet("font-size: 14pt; color: #A0A0B0;")
         layout.addWidget(self.status_label)
 
     @Slot(int)
@@ -72,7 +72,7 @@ class RoundTimerWidget(QWidget):
     def _set_color(self, color: str) -> None:
         """Set the timer text color."""
         self.time_label.setStyleSheet(f"""
-            font-size: 72px;
+            font-size: 72pt;
             font-weight: bold;
             font-family: 'JetBrains Mono', 'Consolas', monospace;
             color: {color};

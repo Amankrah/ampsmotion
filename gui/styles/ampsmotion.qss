@@ -1,5 +1,6 @@
 /* AmpsMotion Qt Stylesheet
  * Ghana-inspired color palette
+ * Using pt (points) for font sizes for better cross-platform support
  */
 
 /* Main Window */
@@ -11,6 +12,7 @@ QWidget {
     background-color: #1A1A2E;
     color: #FFFFFF;
     font-family: "Segoe UI", "SF Pro Display", "Ubuntu", sans-serif;
+    font-size: 10pt;
 }
 
 /* Labels */
@@ -26,7 +28,7 @@ QPushButton {
     border: 1px solid #333355;
     border-radius: 8px;
     padding: 12px 24px;
-    font-size: 14px;
+    font-size: 10pt;
     font-weight: bold;
     min-height: 20px;
 }
@@ -49,7 +51,7 @@ QPushButton:disabled {
 /* Opa Button (Green - Ghana flag) */
 QPushButton#opa_button {
     background-color: #006B3F;
-    font-size: 24px;
+    font-size: 16pt;
     min-height: 80px;
     border: 2px solid #008B4F;
 }
@@ -66,7 +68,7 @@ QPushButton#opa_button:pressed {
 /* Oshi Button (Red - Ghana flag) */
 QPushButton#oshi_button {
     background-color: #CE1126;
-    font-size: 24px;
+    font-size: 16pt;
     min-height: 80px;
     border: 2px solid #EE3136;
 }
@@ -82,14 +84,14 @@ QPushButton#oshi_button:pressed {
 
 /* Score Display (Gold - Ghana flag) */
 QLabel#score_display {
-    font-size: 120px;
+    font-size: 72pt;
     font-weight: bold;
     color: #FCD116;
 }
 
 /* Timer Display */
 QLabel#timer_display {
-    font-size: 72px;
+    font-size: 48pt;
     font-family: "JetBrains Mono", "Consolas", "Courier New", monospace;
     color: #00CC00;
 }
@@ -109,7 +111,7 @@ QLineEdit, QSpinBox, QComboBox {
     border: 1px solid #333355;
     border-radius: 4px;
     padding: 8px 12px;
-    font-size: 14px;
+    font-size: 10pt;
     min-height: 20px;
 }
 
@@ -141,7 +143,7 @@ QToolBar QToolButton {
     border: none;
     border-radius: 4px;
     padding: 8px 16px;
-    font-size: 13px;
+    font-size: 10pt;
 }
 
 QToolBar QToolButton:hover {
@@ -157,6 +159,7 @@ QStatusBar {
     background-color: #0D0D1A;
     color: #A0A0B0;
     border-top: 1px solid #222233;
+    font-size: 9pt;
 }
 
 /* Scroll Area */
@@ -192,6 +195,7 @@ QTableWidget, QTableView {
     gridline-color: #333355;
     border: 1px solid #333355;
     border-radius: 4px;
+    font-size: 10pt;
 }
 
 QTableWidget::item, QTableView::item {
@@ -210,6 +214,7 @@ QHeaderView::section {
     border: none;
     border-bottom: 1px solid #333355;
     font-weight: bold;
+    font-size: 10pt;
 }
 
 /* Group Box */
@@ -218,6 +223,7 @@ QGroupBox {
     border-radius: 8px;
     margin-top: 12px;
     padding-top: 12px;
+    font-size: 10pt;
 }
 
 QGroupBox::title {
@@ -244,6 +250,7 @@ QTabBar::tab {
     border-bottom: none;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
+    font-size: 10pt;
 }
 
 QTabBar::tab:selected {
@@ -264,6 +271,7 @@ QProgressBar {
     height: 20px;
     text-align: center;
     color: #FFFFFF;
+    font-size: 9pt;
 }
 
 QProgressBar::chunk {
@@ -297,4 +305,32 @@ QToolTip {
     border: 1px solid #333355;
     padding: 6px;
     border-radius: 4px;
+    font-size: 9pt;
+}
+
+/* Radio Buttons */
+QRadioButton {
+    font-size: 10pt;
+    spacing: 8px;
+}
+
+QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+}
+
+/* List Widget */
+QListWidget {
+    background-color: #16213E;
+    border: 1px solid #333355;
+    border-radius: 4px;
+    font-size: 10pt;
+}
+
+QListWidget::item {
+    padding: 6px;
+}
+
+QListWidget::item:selected {
+    background-color: #1A2744;
 }
